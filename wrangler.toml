@@ -1,0 +1,9 @@
+name = "faclist"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "./public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "faclist-db"
+# Paste the id printed by: npx wrangler d1 create faclist-db
+database_id = "2db8c160-f92a-4928-b653-ca8186760236"
