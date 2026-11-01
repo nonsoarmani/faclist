@@ -9,7 +9,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, waitUntil })
 
   const cache = (caches as unknown as { default: Cache }).default;
   // Bump CACHE_VERSION after any design/copy change so edge caches serve fresh pages immediately.
-  const CACHE_VERSION = '2';
+  const CACHE_VERSION = '3';
   const u = new URL(request.url);
   const key = new Request(`${u.origin}/__v${CACHE_VERSION}${u.pathname}${u.search}`, { method: 'GET' });
 

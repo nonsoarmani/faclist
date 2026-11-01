@@ -4,11 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-   "dev": "wrangler pages dev ./public",
+    "dev": "wrangler pages dev ./public --d1=DB --compatibility-date=2025-01-01",
     "typecheck": "tsc --noEmit",
     "db:init:local": "wrangler d1 execute faclist-db --local --file=./db/schema.sql && wrangler d1 execute faclist-db --local --file=./db/seed.sql",
     "db:init:remote": "wrangler d1 execute faclist-db --remote --file=./db/schema.sql && wrangler d1 execute faclist-db --remote --file=./db/seed.sql",
-    "deploy": "wrangler pages deploy ./public --project-name=faclist"
+    "deploy": "wrangler pages deploy ./public --project-name=faclist",
+    "import": "node scripts/import.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250101.0",
