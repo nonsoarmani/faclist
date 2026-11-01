@@ -27,34 +27,49 @@ const region = opt('region');
 const out = opt('out') ?? `data/osm-${cc.toLowerCase()}${region ? '-' + region.toLowerCase().replace(/[^a-z0-9]+/g, '-') : ''}.csv`;
 
 /* ---------- 1. get data ---------- */
+const rx = (v) => v.replace(/[\\^$.*+?()[\]{}|"]/g, '\\$&');
 const areaQ = region
-  ? `area["ISO3166-1"="${cc}"][admin_level=2]->.c;\narea["boundary"="administrative"]["name"="${region.replace(/"/g, '')}"](area.c)->.a;`
+  ? `area["ISO3166-1"="${cc}"][admin_level=2]->.c;
+rel["boundary"="administrative"]["name"~"^${rx(region)}$",i](area.c);
+map_to_area->.a;`
   : `area["ISO3166-1"="${cc}"][admin_level=2]->.a;`;
-const query = `[out:json][timeout:300];
+// With --require-website we ask the server only for places that have a website: far less data, far fewer timeouts.
+const webFilters = flag('require-website') ? ['["website"]', '["contact:website"]'] : [''];
+const clauses = webFilters
+  .flatMap((w) => [
+    `nwr["man_made"="works"]["name"]${w}(area.a);`,
+    `nwr["industrial"~"^(factory|machine_shop|metal_processing|foundry|engineering|manufacturing)$"]["name"]${w}(area.a);`,
+    `nwr["craft"~"^(metal_construction|blacksmith|toolmaker)$"]["name"]${w}(area.a);`,
+  ])
+  .join('\n  ');
+const query = `[out:json][timeout:180];
 ${areaQ}
 (
-  nwr["man_made"="works"]["name"](area.a);
-  nwr["industrial"~"^(factory|machine_shop|metal_processing|foundry|engineering|manufacturing)$"]["name"](area.a);
-  nwr["craft"~"^(metal_construction|blacksmith|toolmaker)$"]["name"](area.a);
+  ${clauses}
 );
 out center tags;`;
 
 const MIRRORS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function download() {
-  for (const url of MIRRORS) {
-    try {
-      console.log(`Asking ${new URL(url).host} for ${region ? region + ', ' : ''}${country} (this can take a few minutes)...`);
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'User-Agent': 'FacList-collector/1.0 (directory data import)', 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ data: query }),
-      });
-      const text = await res.text();
-      if (!res.ok) { console.log(`  ${res.status}, trying the next server...`); continue; }
-      return JSON.parse(text);
-    } catch (e) { console.log(`  failed (${e.message}), trying the next server...`); }
+  for (let round = 1; round <= 3; round++) {
+    for (const url of MIRRORS) {
+      try {
+        console.log(`Asking ${new URL(url).host} for ${region ? region + ', ' : ''}${country} (try ${round} of 3, can take a few minutes)...`);
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'User-Agent': 'FacList-collector/1.0 (directory data import)', 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ data: query }),
+        });
+        const text = await res.text();
+        if (!res.ok) { console.log(`  server said ${res.status} (busy), trying the next one...`); continue; }
+        return JSON.parse(text);
+      } catch (e) { console.log(`  could not connect (${e.message}), trying the next one...`); }
+    }
+    if (round < 3) { console.log('\nAll servers are busy. Waiting 30 seconds, then trying again...\n'); await sleep(30000); }
   }
-  console.error('\nAll servers were busy or timed out. Wait a few minutes and run it again, or use --region to download a smaller area.');
+  console.error('\nThe free OpenStreetMap servers are too busy right now. Nothing is wrong with your computer or the files.\nTry again in 10-30 minutes, or pick a smaller area, for example a city: --region "Buffalo"');
+  await sleep(500); // lets network connections close cleanly (avoids a harmless Windows crash message)
   process.exit(1);
 }
 const json = opt('from-file') ? JSON.parse(readFileSync(opt('from-file'), 'utf8')) : await download();

@@ -1,5 +1,6 @@
 import type { Env } from './env';
 import { getCategory, getCertification, getHomeData, getLocation, loadListing, loadSupplier } from './db';
+import { handleSitemap } from './sitemap';
 import { renderHome, renderListing, renderSupplier, layout } from './render';
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -41,6 +42,15 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   const normalised = path.length > 1 ? path.replace(/\/+$/, '').toLowerCase() : path;
   if (normalised !== path) {
     return Response.redirect(origin + normalised + url.search, 301);
+  }
+
+  if (/^\/sitemap[a-z0-9-]*\.xml$/.test(path)) {
+    try {
+      return await handleSitemap(path, env, origin);
+    } catch (err) {
+      console.error('sitemap failure', path, err);
+      return new Response('Sitemap error', { status: 500, headers: { 'cache-control': 'no-store' } });
+    }
   }
 
   const seg = path.split('/').filter(Boolean);
