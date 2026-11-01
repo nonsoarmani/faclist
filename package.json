@@ -9,7 +9,9 @@
     "db:init:local": "wrangler d1 execute faclist-db --local --file=./db/schema.sql && wrangler d1 execute faclist-db --local --file=./db/seed.sql",
     "db:init:remote": "wrangler d1 execute faclist-db --remote --file=./db/schema.sql && wrangler d1 execute faclist-db --remote --file=./db/seed.sql",
     "deploy": "wrangler pages deploy ./public --project-name=faclist",
-    "import": "node scripts/import.mjs"
+    "import": "node scripts/import.mjs",
+    "osm": "node scripts/osm.mjs",
+    "add": "node scripts/add-country.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250101.0",

@@ -3,7 +3,7 @@ import { getCategory, getCertification, getHomeData, getLocation, loadListing, l
 import { renderHome, renderListing, renderSupplier, layout } from './render';
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const CACHE = 'public, max-age=300, s-maxage=86400, stale-while-revalidate=604800';
+const CACHE = 'public, max-age=300, s-maxage=3600';
 
 const html = (body: string, status = 200, extra: HeadersInit = {}) =>
   new Response(body, {

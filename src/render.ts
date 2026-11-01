@@ -107,7 +107,7 @@ ${jsonLd(o.schema)}
 <nav class="main nav-hide"><a href="/#categories">Categories</a><a href="/#countries">Countries</a><a href="/#why">Why FacList</a></nav>
 </div></header>
 ${o.body}
-<footer class="site"><div class="wrap"><a href="/"><b>FacList</b></a> &middot; Global manufacturing and supplier directory &middot; &copy; ${new Date().getFullYear()}</div></footer>
+<footer class="site"><div class="wrap"><a href="/"><b>FacList</b></a> &middot; Global manufacturing and supplier directory &middot; &copy; ${new Date().getFullYear()}<br>Some listing data &copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap contributors</a></div></footer>
 </body></html>`;
 }
 
