@@ -1,5 +1,5 @@
 import type { Env } from './env';
-import { getCategory, getCertification, getHomeCategories, getLocation, loadListing, loadSupplier } from './db';
+import { getCategory, getCertification, getHomeData, getLocation, loadListing, loadSupplier } from './db';
 import { renderHome, renderListing, renderSupplier, layout } from './render';
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -20,7 +20,7 @@ function notFound(origin: string): Response {
       origin,
       noindex: true,
       schema: { '@context': 'https://schema.org', '@type': 'WebPage', name: 'Not found' },
-      body: `<h1>Page not found</h1><p><a href="/">Browse the FacList directory</a></p>`,
+      body: `<div class="wrap" style="padding:60px 20px"><h1>Page not found</h1><p><a href="/">Browse the FacList directory</a></p></div>`,
     }),
     404
   );
@@ -47,7 +47,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   if (seg.some((s) => !SLUG.test(s))) return notFound(origin);
 
   try {
-    if (seg.length === 0) return html(renderHome(origin, await getHomeCategories(env)));
+    if (seg.length === 0) return html(renderHome(origin, await getHomeData(env)));
 
     if (seg[0] === 'supplier' && seg.length === 2) {
       const data = await loadSupplier(env, seg[1]);

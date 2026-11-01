@@ -222,3 +222,36 @@ export async function loadSupplier(env: Env, slug: string): Promise<SupplierData
     related: rel.results as unknown as CompanyCard[],
   };
 }
+
+/* ---------- homepage ---------- */
+
+export interface HomeData {
+  total: number;
+  categories: { slug: string; name: string; n: number }[];
+  countries: { slug: string; name: string; n: number; cat_slug: string | null }[];
+}
+
+export async function getHomeData(env: Env): Promise<HomeData> {
+  const [t, cats, ctry] = await env.DB.batch([
+    env.DB.prepare('SELECT COUNT(*) AS n FROM companies'),
+    env.DB.prepare(
+      `SELECT cat.slug, cat.name, COUNT(cc.company_id) AS n
+         FROM categories cat LEFT JOIN company_categories cc ON cc.category_id = cat.id
+        GROUP BY cat.id ORDER BY n DESC, cat.name`
+    ),
+    env.DB.prepare(
+      `SELECT c.country_slug AS slug, c.country AS name, COUNT(*) AS n,
+              (SELECT cat.slug FROM company_categories cc2
+                 JOIN categories cat ON cat.id = cc2.category_id
+                 JOIN companies c2 ON c2.id = cc2.company_id
+                WHERE c2.country_slug = c.country_slug
+                GROUP BY cat.id ORDER BY COUNT(*) DESC LIMIT 1) AS cat_slug
+         FROM companies c GROUP BY c.country_slug ORDER BY n DESC, name LIMIT 60`
+    ),
+  ]);
+  return {
+    total: (t.results[0] as { n: number }).n,
+    categories: cats.results as unknown as HomeData['categories'],
+    countries: ctry.results as unknown as HomeData['countries'],
+  };
+}
