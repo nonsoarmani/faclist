@@ -43,7 +43,8 @@ section.block{padding:44px 0 8px}h2.sec{font-size:1.55rem;margin:0 0 20px;color:
 .pagehead h1{margin:8px 0 10px;color:var(--navy);font-size:clamp(1.6rem,3vw,2.2rem);letter-spacing:-.01em}
 .pagehead p{margin:0;color:#475569;max-width:820px}
 .crumbs{font-size:.85rem;color:var(--mut)}.crumbs a{color:var(--mut);text-decoration:none}.crumbs a:hover{color:var(--blue)}
-.layout{display:grid;grid-template-columns:270px 1fr;gap:28px;align-items:start;padding-top:28px}
+.layout{display:grid;grid-template-columns:270px minmax(0,1fr);gap:28px;align-items:start;padding-top:28px}
+.layout.profile{grid-template-columns:minmax(0,1fr) 300px}
 aside .box{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:16px}
 aside h3{margin:0 0 8px;font-size:.78rem;text-transform:uppercase;letter-spacing:.07em;color:var(--mut)}
 aside ul{list-style:none;margin:0;padding:0}
@@ -79,7 +80,43 @@ form.hsearch input:focus{border-color:var(--blue);background:#fff}
 .pop{margin-top:14px;font-size:.9rem;color:#b6c7ee}.pop a{color:#fff;margin-right:14px}
 .na{color:#94a3b8;font-weight:400;font-style:normal}
 .list2{margin:0;padding-left:20px;color:#334155}.list2 li{margin:2px 0}
-@media(max-width:860px){form.hsearch{margin:0 0 0 12px}.layout{grid-template-columns:1fr}.nav-hide{display:none}.result{flex-wrap:wrap}.result .cta{width:100%}.hero{padding:44px 0 40px}.search{flex-direction:column}}`;
+.fbox,aside .box.fbox{padding:0}.fbox summary{cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:14px 18px;font-size:.78rem;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);font-weight:700;list-style:none}
+.fbox summary::-webkit-details-marker{display:none}.fbox summary::after{content:"+";font-size:1.2rem;line-height:1}.fbox[open] summary::after{content:"\\2212"}
+.fbox ul{padding:0 18px 12px}
+.fbox summary{min-height:48px}
+img,svg{max-width:100%}.result h3,.pagehead h1,.fact span:last-child{overflow-wrap:anywhere}
+@media(max-width:860px){
+html,body{overflow-x:hidden}
+.wrap{padding:0 16px}
+header.site{position:static}
+.bar{flex-wrap:wrap;height:auto;padding-top:12px;padding-bottom:12px;gap:10px}
+form.hsearch{order:3;flex:1 1 100%;max-width:none;margin:0}
+form.hsearch input{font-size:16px;padding:11px 16px}
+.nav-hide{display:none}
+.hero{padding:34px 0 30px}.hero p.lead{font-size:1rem}
+.search{flex-direction:column;padding:10px;gap:6px;margin-top:20px}
+.search input{padding:12px 8px;font-size:16px}.search .btn{width:100%;padding:14px}
+.pop{line-height:2}.pop a{display:inline-block;margin-right:12px}
+.stats{gap:24px;margin-top:24px}.stats b{font-size:1.35rem}
+section.block{padding-top:30px}h2.sec{font-size:1.3rem}
+.grid{grid-template-columns:1fr}
+.layout,.layout.profile{grid-template-columns:minmax(0,1fr);gap:16px;padding-top:18px}
+.layout.profile aside{order:-1}
+aside .box{margin-bottom:10px}.fbox ul{max-height:240px;overflow:auto}.fbox summary{padding:12px 16px}.fbox ul{padding:0 16px 10px}
+.pagehead{padding:16px 0 20px}.pagehead h1{font-size:1.45rem}
+.crumbs{overflow-wrap:anywhere}
+.resulthead{flex-direction:column;gap:2px}
+.result{flex-wrap:wrap;padding:14px;gap:12px}.result .av{width:40px;height:40px;font-size:.95rem}
+.result .cta{width:100%;padding:12px}.result .body{min-width:0}
+.profilehead{gap:14px;align-items:flex-start}.profilehead h1{font-size:1.3rem!important}
+.av.lg{width:56px;height:56px;font-size:1.3rem;border-radius:12px}
+.prose{padding:16px;margin:14px 0}
+.fact{font-size:.9rem}
+.chips a{padding:7px 14px}
+.pager{gap:8px}.pager .btn{padding:12px 16px}
+.feat{grid-template-columns:1fr}
+footer.site{margin-top:36px;text-align:center}
+}`;
 
 const LOGO = `<svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#1d4ed8"/><path d="M8 24V9h10v3.2h-6.4v3.2H17v3.1h-5.4V24z" fill="#fff"/><circle cx="23.5" cy="21.5" r="3" fill="#f59e0b"/></svg>`;
 
@@ -111,7 +148,7 @@ ${jsonLd(o.schema)}
 </head><body>
 <header class="site"><div class="wrap bar">
 <a class="logo" href="/">${LOGO}FacList</a>
-<form class="hsearch" action="/search" method="get" role="search"><input type="search" name="q" maxlength="100" placeholder="Search suppliers, e.g. CNC machining Lagos" aria-label="Search suppliers"></form>
+<form class="hsearch" action="/search" method="get" role="search"><input type="search" name="q" maxlength="100" placeholder="Search e.g. CNC machining Lagos" aria-label="Search suppliers"></form>
 <nav class="main nav-hide"><a href="/#categories">Categories</a><a href="/#countries">Countries</a><a href="/#why">Why FacList</a></nav>
 </div></header>
 ${o.body}
@@ -136,6 +173,8 @@ const avatar = (name: string, lg = false) =>
 
 const TIER: Record<string, string> = { micro: 'Micro business', small: 'Small business', mid: 'Mid-size', large: 'Large manufacturer', enterprise: 'Enterprise' };
 
+const uniq = (a: (string | null | undefined)[]) => [...new Set(a.filter(Boolean) as string[])];
+
 const crumbsHtml = (items: { name: string; url: string }[]) =>
   `<nav class="crumbs" aria-label="Breadcrumb">${items
     .map((i, idx) => (idx === items.length - 1 ? esc(i.name) : `<a href="${esc(i.url)}">${esc(i.name)}</a>`))
@@ -147,7 +186,7 @@ const crumbsLd = (origin: string, items: { name: string; url: string }[]) => ({
 });
 
 const resultCard = (c: CompanyCard) => {
-  const where = [c.city, c.state ?? c.country].filter(Boolean).join(', ');
+  const where = uniq([c.city, c.state ?? c.country]).join(', ');
   const full = c.description ?? '';
   return `<article class="result">${avatar(c.name)}<div class="body">
 <h3><a href="/supplier/${esc(c.slug)}">${esc(c.name)}</a>${c.claimed_status ? '<span class="ver">&#10003; Verified</span>' : ''}</h3>
@@ -164,7 +203,7 @@ export function renderHome(origin: string, d: HomeData): string {
   const body = `<section class="hero"><div class="wrap">
 <h1>Find trusted manufacturers and suppliers worldwide</h1>
 <p class="lead">Compare verified factories by capability, country and certification, then go straight to the supplier that fits.</p>
-<form class="search" action="/search" method="get" role="search"><input type="search" name="q" maxlength="100" placeholder="What do you need? e.g. sheet metal fabrication Lagos" aria-label="Search suppliers"><button class="btn" type="submit">Search</button></form>
+<form class="search" action="/search" method="get" role="search"><input type="search" name="q" maxlength="100" placeholder="e.g. sheet metal Lagos" aria-label="Search suppliers"><button class="btn" type="submit">Search</button></form>
 <div class="pop">Popular: ${d.categories.slice(0, 4).map((c) => `<a href="/directory/${esc(c.slug)}">${esc(c.name)}</a>`).join('')}</div>
 <div class="stats"><div><b>${d.total.toLocaleString('en-US')}</b><span>Suppliers listed</span></div><div><b>${d.categories.length}</b><span>Categories</span></div><div><b>${d.countries.length}</b><span>Countries</span></div></div>
 </div></section>
@@ -262,10 +301,12 @@ export function renderListing(i: ListingInput): string {
         }</ul></div>`
       : '';
 
+  const fb = (h: string) => h.replace('<div class="box"><h3>', '<details class="box fbox" open><summary>').replace('</h3>', '</summary>').replace(/<\/div>$/, '</details>');
   const body = `<div class="pagehead"><div class="wrap">${crumbsHtml(crumbs)}
 <h1>${esc(copy.h1)}</h1><p>${esc(copy.paragraphs[0])}</p></div></div>
 <div class="wrap layout">
-<aside>${upBox}${locBox}${certBox}</aside>
+<aside>${fb(upBox)}${fb(locBox)}${fb(certBox)}</aside>
+<script>if(innerWidth<860)document.querySelectorAll('details.fbox').forEach(function(d){d.open=false})</script>
 <div>
 <div class="resulthead"><h2>${data.total.toLocaleString('en-US')} ${data.total === 1 ? 'supplier' : 'suppliers'} found</h2><span class="loc">${pages > 1 ? `Page ${page} of ${pages}` : ''}</span></div>
 ${data.companies.map(resultCard).join('')}
@@ -338,7 +379,7 @@ export function renderSearch(
   const link = (p: number) => `/search?q=${encodeURIComponent(q)}${p > 1 ? `&page=${p}` : ''}`;
   const body = `<div class="pagehead"><div class="wrap">${crumbsHtml([{ name: 'Home', url: '/' }, { name: 'Search', url: '/search' }])}
 <h1>${q ? `Results for &ldquo;${esc(q)}&rdquo;` : 'Search suppliers'}</h1>
-<form action="/search" method="get" role="search" style="margin-top:12px;display:flex;gap:8px;max-width:640px"><input type="search" name="q" value="${esc(q)}" maxlength="100" placeholder="e.g. CNC machining Lagos" aria-label="Search suppliers" style="flex:1;padding:12px 14px;border:1px solid var(--line);border-radius:10px;font-size:1rem"><button class="btn blue" type="submit">Search</button></form></div></div>
+<form action="/search" method="get" role="search" style="margin-top:12px;display:flex;gap:8px;max-width:640px"><input type="search" name="q" value="${esc(q)}" maxlength="100" placeholder="e.g. CNC machining" aria-label="Search suppliers" style="flex:1;min-width:0;padding:12px 14px;border:1px solid var(--line);border-radius:10px;font-size:16px"><button class="btn blue" type="submit">Search</button></form></div></div>
 <div class="wrap" style="padding-top:28px">
 ${
   results && results.total > 0
@@ -408,7 +449,7 @@ export function renderSupplier(origin: string, d: SupplierData): string {
 <h1 style="margin:0">${esc(c.name)}${c.claimed_status ? '<span class="ver">&#10003; Verified</span>' : ''}</h1>
 <div class="loc" style="margin-top:4px">&#128205; ${esc(copy.where)}</div>
 <div class="tags">${c.company_type ? `<span class="tag grey">${esc(c.company_type)}</span>` : ''}${year ? `<span class="tag grey">Est. ${year}</span>` : ''}${certs.map((x) => `<span class="tag">${esc(x.code)}</span>`).join('')}</div></div></div></div></div>
-<div class="wrap layout" style="grid-template-columns:1fr 300px">
+<div class="wrap layout profile">
 <div>
 <div class="prose" style="margin-top:0"><h2>About ${esc(c.name)}</h2>${c.description ? `<p>${esc(c.description)}</p>` : ''}${copy.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}</div>
 <div class="prose"><h2>Capabilities</h2>${
@@ -432,7 +473,7 @@ ${
 ${related.length ? `<h2 class="sec" style="margin-top:28px">Similar suppliers nearby</h2>${related.map(resultCard).join('')}` : ''}
 </div>
 <aside><div class="box"><h3>Company facts</h3>
-${fact('Location', esc([c.city, c.state, c.country].filter(Boolean).join(', ')))}
+${fact('Location', esc(uniq([c.city, c.state, c.country]).join(', ')))}
 ${fact('Address', c.address ? esc(c.address) : null)}
 ${fact('Company type', c.company_type ? esc(c.company_type) : null)}
 ${fact('Year founded', year ? `${year}${yrs ? ` (${yrs} ${yrs === 1 ? 'year' : 'years'} in business)` : ''}` : null)}

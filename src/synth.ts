@@ -217,7 +217,7 @@ export function tierLabel(t: string | null): string | null {
 
 export function synthSupplier(c: SupplierCtx) {
   const rng = makeRng(c.path);
-  const where = [c.company.city, c.company.state, c.company.country].filter(Boolean).join(', ');
+  const where = [...new Set([c.company.city, c.company.state, c.company.country].filter(Boolean))].join(', ');
   const cats = c.categories.map((x) => x.toLowerCase());
   const primary = c.categories[0] ?? 'Manufacturing';
 
@@ -270,7 +270,7 @@ export function synthSupplier(c: SupplierCtx) {
   }
 
   return {
-    title: `${c.company.name} - ${primary} Manufacturer in ${[c.company.city, c.company.state ?? c.company.country].filter(Boolean).join(', ')} | FacList`,
+    title: `${c.company.name} - ${primary} Manufacturer in ${[...new Set([c.company.city, c.company.state ?? c.company.country].filter(Boolean))].join(', ')} | FacList`,
     metaDescription: `${sentences.slice(0, 2).join(' ')} View credentials and request a quote on FacList.`.slice(0, 300),
     paragraphs: [sentences.slice(0, 3).join(' '), sentences.slice(3).join(' ')].filter(Boolean),
     where,
