@@ -1,7 +1,7 @@
 import type { Env } from './env';
-import { getCategory, getCertification, getHomeData, getLocation, loadListing, loadSupplier } from './db';
+import { getCategory, getCertification, getHomeCategories, getHomeData, getLocation, loadListing, loadSupplier, searchCompanies } from './db';
 import { handleSitemap } from './sitemap';
-import { renderHome, renderListing, renderSupplier, layout } from './render';
+import { renderHome, renderListing, renderSearch, renderSupplier, layout } from './render';
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const CACHE = 'public, max-age=300, s-maxage=3600';
@@ -33,7 +33,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   let path = url.pathname;
 
   if (path === '/robots.txt') {
-    return new Response(`User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap-index.xml\n`, {
+    return new Response(`User-agent: *\nAllow: /\nDisallow: /search\nSitemap: ${origin}/sitemap-index.xml\n`, {
       headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': CACHE },
     });
   }
@@ -58,6 +58,14 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
   try {
     if (seg.length === 0) return html(renderHome(origin, await getHomeData(env)));
+
+    if (seg[0] === 'search' && seg.length === 1) {
+      const q = (url.searchParams.get('q') ?? '').trim().slice(0, 100);
+      const rawPage = Number(url.searchParams.get('page') ?? '1');
+      const page = Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : 1;
+      const [results, cats] = await Promise.all([q ? searchCompanies(env, q, page) : null, getHomeCategories(env)]);
+      return html(renderSearch(origin, q, results, page, cats));
+    }
 
     if (seg[0] === 'supplier' && seg.length === 2) {
       const data = await loadSupplier(env, seg[1]);

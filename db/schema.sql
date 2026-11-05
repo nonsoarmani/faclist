@@ -45,7 +45,14 @@ CREATE TABLE IF NOT EXISTS companies (
   employee_count  INTEGER,
   revenue_tier    TEXT CHECK (revenue_tier IN ('micro','small','mid','large','enterprise')),
   claimed_status  INTEGER NOT NULL DEFAULT 0 CHECK (claimed_status IN (0,1)),
-  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  year_founded    INTEGER,
+  company_type    TEXT,
+  sales_range     TEXT,
+  industries      TEXT,
+  capabilities    TEXT,
+  products        TEXT,
+  data_source     TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_companies_country ON companies (country_slug);
@@ -64,3 +71,9 @@ CREATE TABLE IF NOT EXISTS company_certifications (
   PRIMARY KEY (certification_id, company_id)
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS idx_cx_company ON company_certifications (company_id);
+
+-- Full-text search (powers /search). Kept in sync by the importer.
+CREATE VIRTUAL TABLE IF NOT EXISTS company_search USING fts5(
+  name, city, state, country, categories, description, details,
+  tokenize = 'unicode61 remove_diacritics 2'
+);

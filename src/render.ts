@@ -72,7 +72,14 @@ aside li a:hover{color:var(--blue)}aside li span{color:var(--mut)}
 .profilehead{display:flex;gap:20px;align-items:center}
 footer.site{background:var(--navy);color:#b8c6e0;padding:34px 0;margin-top:56px;font-size:.9rem}
 footer.site a{color:#fff;text-decoration:none}
-@media(max-width:860px){.layout{grid-template-columns:1fr}.nav-hide{display:none}.result{flex-wrap:wrap}.result .cta{width:100%}.hero{padding:44px 0 40px}.search{flex-direction:column}}`;
+form.hsearch{flex:1;max-width:400px;margin:0 20px}
+form.hsearch input{width:100%;border:1px solid var(--line);border-radius:99px;padding:9px 16px;font-size:.92rem;background:var(--bg);color:var(--fg);outline:none}
+form.hsearch input:focus{border-color:var(--blue);background:#fff}
+.search input{flex:1;min-width:0;border:0;font-size:1rem;padding:12px 10px;background:transparent;color:var(--fg);outline:none}
+.pop{margin-top:14px;font-size:.9rem;color:#b6c7ee}.pop a{color:#fff;margin-right:14px}
+.na{color:#94a3b8;font-weight:400;font-style:normal}
+.list2{margin:0;padding-left:20px;color:#334155}.list2 li{margin:2px 0}
+@media(max-width:860px){form.hsearch{margin:0 0 0 12px}.layout{grid-template-columns:1fr}.nav-hide{display:none}.result{flex-wrap:wrap}.result .cta{width:100%}.hero{padding:44px 0 40px}.search{flex-direction:column}}`;
 
 const LOGO = `<svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#1d4ed8"/><path d="M8 24V9h10v3.2h-6.4v3.2H17v3.1h-5.4V24z" fill="#fff"/><circle cx="23.5" cy="21.5" r="3" fill="#f59e0b"/></svg>`;
 
@@ -104,6 +111,7 @@ ${jsonLd(o.schema)}
 </head><body>
 <header class="site"><div class="wrap bar">
 <a class="logo" href="/">${LOGO}FacList</a>
+<form class="hsearch" action="/search" method="get" role="search"><input type="search" name="q" maxlength="100" placeholder="Search suppliers, e.g. CNC machining Lagos" aria-label="Search suppliers"></form>
 <nav class="main nav-hide"><a href="/#categories">Categories</a><a href="/#countries">Countries</a><a href="/#why">Why FacList</a></nav>
 </div></header>
 ${o.body}
@@ -145,7 +153,7 @@ const resultCard = (c: CompanyCard) => {
 <h3><a href="/supplier/${esc(c.slug)}">${esc(c.name)}</a>${c.claimed_status ? '<span class="ver">&#10003; Verified</span>' : ''}</h3>
 <div class="loc">&#128205; ${esc(where)}</div>
 ${full ? `<p>${esc(full.slice(0, 190))}${full.length > 190 ? '&hellip;' : ''}</p>` : ''}
-<div class="tags">${c.revenue_tier ? `<span class="tag grey">${esc(TIER[c.revenue_tier] ?? c.revenue_tier)}</span>` : ''}${
+<div class="tags">${c.company_type ? `<span class="tag">${esc(c.company_type)}</span>` : ''}${c.year_founded ? `<span class="tag grey">Est. ${c.year_founded}</span>` : ''}${c.revenue_tier ? `<span class="tag grey">${esc(TIER[c.revenue_tier] ?? c.revenue_tier)}</span>` : ''}${
     c.employee_count ? `<span class="tag grey">${c.employee_count} employees</span>` : ''
   }</div></div><a class="btn blue cta" href="/supplier/${esc(c.slug)}">View profile</a></article>`;
 };
@@ -156,10 +164,8 @@ export function renderHome(origin: string, d: HomeData): string {
   const body = `<section class="hero"><div class="wrap">
 <h1>Find trusted manufacturers and suppliers worldwide</h1>
 <p class="lead">Compare verified factories by capability, country and certification, then go straight to the supplier that fits.</p>
-<form class="search" onsubmit="var v=this.c.value;if(v){location.href='/directory/'+v}return false">
-<select name="c" aria-label="Choose a category"><option value="">What are you looking for?</option>${d.categories
-    .map((c) => `<option value="${esc(c.slug)}">${esc(c.name)}</option>`)
-    .join('')}</select><button class="btn" type="submit">Find suppliers</button></form>
+<form class="search" action="/search" method="get" role="search"><input type="search" name="q" maxlength="100" placeholder="What do you need? e.g. sheet metal fabrication Lagos" aria-label="Search suppliers"><button class="btn" type="submit">Search</button></form>
+<div class="pop">Popular: ${d.categories.slice(0, 4).map((c) => `<a href="/directory/${esc(c.slug)}">${esc(c.name)}</a>`).join('')}</div>
 <div class="stats"><div><b>${d.total.toLocaleString('en-US')}</b><span>Suppliers listed</span></div><div><b>${d.categories.length}</b><span>Categories</span></div><div><b>${d.countries.length}</b><span>Countries</span></div></div>
 </div></section>
 <div class="wrap">
@@ -319,13 +325,72 @@ ${
   });
 }
 
+/* ---------- search ---------- */
+
+export function renderSearch(
+  origin: string,
+  q: string,
+  results: { total: number; companies: CompanyCard[] } | null,
+  page: number,
+  cats: { slug: string; name: string; n: number }[]
+): string {
+  const pages = results ? Math.ceil(results.total / PAGE_SIZE) : 0;
+  const link = (p: number) => `/search?q=${encodeURIComponent(q)}${p > 1 ? `&page=${p}` : ''}`;
+  const body = `<div class="pagehead"><div class="wrap">${crumbsHtml([{ name: 'Home', url: '/' }, { name: 'Search', url: '/search' }])}
+<h1>${q ? `Results for &ldquo;${esc(q)}&rdquo;` : 'Search suppliers'}</h1>
+<form action="/search" method="get" role="search" style="margin-top:12px;display:flex;gap:8px;max-width:640px"><input type="search" name="q" value="${esc(q)}" maxlength="100" placeholder="e.g. CNC machining Lagos" aria-label="Search suppliers" style="flex:1;padding:12px 14px;border:1px solid var(--line);border-radius:10px;font-size:1rem"><button class="btn blue" type="submit">Search</button></form></div></div>
+<div class="wrap" style="padding-top:28px">
+${
+  results && results.total > 0
+    ? `<div class="resulthead"><h2>${results.total.toLocaleString('en-US')} ${results.total === 1 ? 'supplier' : 'suppliers'} found</h2><span class="loc">${pages > 1 ? `Page ${page} of ${pages}` : ''}</span></div>
+${results.companies.map(resultCard).join('')}
+${
+  pages > 1
+    ? `<nav class="pager" aria-label="Pagination">${page > 1 ? `<a class="btn ghost" rel="prev" href="${esc(link(page - 1))}">&larr; Previous</a>` : '<span></span>'}<span class="loc">Page ${page} of ${pages}</span>${page < pages ? `<a class="btn blue" rel="next" href="${esc(link(page + 1))}">Next &rarr;</a>` : '<span></span>'}</nav>`
+    : ''
+}`
+    : `<div class="prose" style="margin-top:0"><h2>${q ? 'No suppliers matched that search' : 'What are you looking for?'}</h2><p>${q ? 'Try fewer or simpler words, or browse a category:' : 'Type a product, process or place above, or browse a category:'}</p><ul class="chips">${cats.map((c) => `<li><a href="/directory/${esc(c.slug)}">${esc(c.name)} (${c.n})</a></li>`).join('')}</ul></div>`
+}
+</div>`;
+  return layout({
+    title: q ? `${q} - Supplier search | FacList` : 'Search suppliers | FacList',
+    description: 'Search manufacturers and suppliers on FacList.',
+    canonical: origin + '/search',
+    origin,
+    body,
+    noindex: true,
+    schema: { '@context': 'https://schema.org', '@type': 'SearchResultsPage', name: 'Supplier search', url: origin + '/search' },
+  });
+}
+
 /* ---------- supplier ---------- */
+
+const items = (s: string | null) => (s ?? '').split(';').map((x) => x.trim()).filter(Boolean);
+const empRange = (n: number | null) =>
+  n == null ? null : n <= 10 ? '1-10' : n <= 50 ? '11-50' : n <= 200 ? '51-200' : n <= 500 ? '201-500' : n <= 1000 ? '501-1,000' : '1,000+';
 
 export function renderSupplier(origin: string, d: SupplierData): string {
   const { company: c, categories, certs, related } = d;
   const path = `/supplier/${c.slug}`;
   const url = origin + path;
-  const copy = synthSupplier({ path, company: c, categories: categories.map((x) => x.name), certs, nearby: related });
+  const nowYear = new Date().getFullYear();
+  const year = c.year_founded && c.year_founded <= nowYear ? c.year_founded : null;
+  const caps = items(c.capabilities);
+  const inds = items(c.industries);
+  const prods = items(c.products);
+
+  const copy = synthSupplier({
+    path,
+    company: c,
+    categories: categories.map((x) => x.name),
+    certs,
+    nearby: related,
+    yearFounded: year,
+    companyType: c.company_type,
+    capabilities: caps,
+    industries: inds,
+  });
+
   const primary = categories[0];
   const crumbs = [
     { name: 'Home', url: '/' },
@@ -333,21 +398,26 @@ export function renderSupplier(origin: string, d: SupplierData): string {
     { name: c.name, url: path },
   ];
   const locSlug = c.state_slug ?? c.country_slug;
-  const fact = (k: string, v: string | null | undefined) => (v ? `<div class="fact"><span>${esc(k)}</span><span>${v}</span></div>` : '');
+  const na = '<em class="na">Not provided</em>';
+  const fact = (k: string, v: string | null | undefined) => `<div class="fact"><span>${esc(k)}</span><span>${v ? v : na}</span></div>`;
+  const yrs = year ? nowYear - year : null;
+  const sales = c.sales_range ?? (c.revenue_tier ? (TIER[c.revenue_tier] ?? null) : null);
 
   const body = `<div class="pagehead"><div class="wrap">${crumbsHtml(crumbs)}
 <div class="profilehead" style="margin-top:12px">${avatar(c.name, true)}<div>
 <h1 style="margin:0">${esc(c.name)}${c.claimed_status ? '<span class="ver">&#10003; Verified</span>' : ''}</h1>
 <div class="loc" style="margin-top:4px">&#128205; ${esc(copy.where)}</div>
-<div class="tags">${certs.map((x) => `<span class="tag">${esc(x.code)}</span>`).join('')}</div></div></div></div></div>
+<div class="tags">${c.company_type ? `<span class="tag grey">${esc(c.company_type)}</span>` : ''}${year ? `<span class="tag grey">Est. ${year}</span>` : ''}${certs.map((x) => `<span class="tag">${esc(x.code)}</span>`).join('')}</div></div></div></div></div>
 <div class="wrap layout" style="grid-template-columns:1fr 300px">
 <div>
 <div class="prose" style="margin-top:0"><h2>About ${esc(c.name)}</h2>${c.description ? `<p>${esc(c.description)}</p>` : ''}${copy.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}</div>
-<div class="prose"><h2>Capabilities</h2><ul class="chips">${categories
-    .map((x) => `<li><a href="/directory/${esc(x.slug)}">${esc(x.name)}</a></li>`)
-    .join('')}${categories
+<div class="prose"><h2>Capabilities</h2>${
+    caps.length ? `<ul class="list2">${caps.map((x) => `<li>${esc(x)}</li>`).join('')}</ul><br>` : ''
+  }<ul class="chips">${categories.map((x) => `<li><a href="/directory/${esc(x.slug)}">${esc(x.name)}</a></li>`).join('')}${categories
     .map((x) => `<li><a href="/directory/${esc(x.slug)}/${esc(locSlug)}">${esc(x.name)} in ${esc(c.state ?? c.country)}</a></li>`)
     .join('')}</ul></div>
+${inds.length ? `<div class="prose"><h2>Industries served</h2><ul class="chips">${inds.map((x) => `<li><span class="tag" style="font-size:.9rem;padding:4px 12px">${esc(x)}</span></li>`).join('')}</ul></div>` : ''}
+${prods.length ? `<div class="prose"><h2>Products</h2><ul class="list2">${prods.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
 ${
   certs.length
     ? `<div class="prose"><h2>Certifications</h2><ul class="chips">${certs
@@ -364,8 +434,10 @@ ${related.length ? `<h2 class="sec" style="margin-top:28px">Similar suppliers ne
 <aside><div class="box"><h3>Company facts</h3>
 ${fact('Location', esc([c.city, c.state, c.country].filter(Boolean).join(', ')))}
 ${fact('Address', c.address ? esc(c.address) : null)}
-${fact('Employees', c.employee_count ? String(c.employee_count) : null)}
-${fact('Company size', c.revenue_tier ? esc(TIER[c.revenue_tier] ?? c.revenue_tier) : null)}
+${fact('Company type', c.company_type ? esc(c.company_type) : null)}
+${fact('Year founded', year ? `${year}${yrs ? ` (${yrs} ${yrs === 1 ? 'year' : 'years'} in business)` : ''}` : null)}
+${fact('Employees', empRange(c.employee_count))}
+${fact('Annual sales', sales ? esc(sales) : null)}
 ${fact('Profile', c.claimed_status ? 'Verified' : 'Unclaimed')}
 ${c.website ? `<p style="margin:14px 0 0"><a class="btn blue" style="display:block" href="${esc(c.website)}" rel="nofollow noopener" target="_blank">Visit website</a></p>` : ''}
 </div></aside></div>`;
@@ -387,6 +459,8 @@ ${c.website ? `<p style="margin:14px 0 0"><a class="btn blue" style="display:blo
         name: c.name,
         description: c.description ?? undefined,
         url: c.website ?? url,
+        foundingDate: year ? String(year) : undefined,
+        knowsAbout: caps.length ? caps : undefined,
         address: {
           '@type': 'PostalAddress',
           streetAddress: c.address ?? undefined,

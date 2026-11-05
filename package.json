@@ -11,7 +11,9 @@
     "deploy": "wrangler pages deploy ./public --project-name=faclist",
     "import": "node scripts/import.mjs",
     "osm": "node scripts/osm.mjs",
-    "add": "node scripts/add-country.mjs"
+    "add": "node scripts/add-country.mjs",
+    "db:migrate:remote": "wrangler d1 execute faclist-db --remote --file=./db/migrations/002-richer-profiles.sql",
+    "db:migrate:local": "wrangler d1 execute faclist-db --local --file=./db/migrations/002-richer-profiles.sql"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250101.0",

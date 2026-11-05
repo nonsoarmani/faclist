@@ -34,3 +34,10 @@ INSERT OR IGNORE INTO company_categories (category_id, company_id) VALUES
 
 INSERT OR IGNORE INTO company_certifications (certification_id, company_id) VALUES
  (1,1),(2,1),(1,2),(1,3),(1,4),(2,4),(1,5),(1,6),(3,6);
+
+INSERT INTO company_search (rowid, name, city, state, country, categories, description, details)
+SELECT c.id, c.name, COALESCE(c.city,''), COALESCE(c.state,''), c.country,
+       COALESCE((SELECT group_concat(cat.name, ' ') FROM company_categories cc JOIN categories cat ON cat.id = cc.category_id WHERE cc.company_id = c.id), ''),
+       COALESCE(c.description,''), ''
+  FROM companies c
+ WHERE c.id NOT IN (SELECT rowid FROM company_search);

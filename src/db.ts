@@ -38,6 +38,8 @@ export interface CompanyCard {
   employee_count: number | null;
   revenue_tier: string | null;
   claimed_status: number;
+  year_founded: number | null;
+  company_type: string | null;
 }
 
 export interface Company extends CompanyCard {
@@ -47,6 +49,11 @@ export interface Company extends CompanyCard {
   lng: number | null;
   website: string | null;
   created_at: string;
+  sales_range: string | null;
+  industries: string | null;
+  capabilities: string | null;
+  products: string | null;
+  data_source: string | null;
 }
 
 export interface Facet {
@@ -140,7 +147,7 @@ export async function loadListing(env: Env, f: Filter, page: number): Promise<Li
     ).bind(...base.params),
     env.DB.prepare(
       `SELECT c.id, c.slug, c.name, c.description, c.city, c.state, c.state_slug, c.country, c.country_slug,
-              c.employee_count, c.revenue_tier, c.claimed_status
+              c.employee_count, c.revenue_tier, c.claimed_status, c.year_founded, c.company_type
          FROM ${base.from} WHERE ${base.where}
         ORDER BY c.claimed_status DESC, c.employee_count DESC, c.id
         LIMIT ? OFFSET ?`
@@ -207,7 +214,7 @@ export async function loadSupplier(env: Env, slug: string): Promise<SupplierData
     ).bind(company.id),
     env.DB.prepare(
       `SELECT c.id, c.slug, c.name, c.description, c.city, c.state, c.state_slug, c.country, c.country_slug,
-              c.employee_count, c.revenue_tier, c.claimed_status
+              c.employee_count, c.revenue_tier, c.claimed_status, c.year_founded, c.company_type
          FROM company_categories cc JOIN companies c ON c.id = cc.company_id
         WHERE cc.category_id = (SELECT MIN(category_id) FROM company_categories WHERE company_id = ?)
           AND c.id != ? AND c.country_slug = ?
@@ -254,4 +261,31 @@ export async function getHomeData(env: Env): Promise<HomeData> {
     categories: cats.results as unknown as HomeData['categories'],
     countries: ctry.results as unknown as HomeData['countries'],
   };
+}
+
+/* ---------- search ---------- */
+
+const STOP = new Set(['in', 'for', 'the', 'and', 'of', 'a', 'to', 'near', 'at', 'on', 'with']);
+
+/** Turns what a visitor typed into a safe FTS5 query: every word must match (as a prefix). */
+export function ftsQuery(raw: string): string | null {
+  const words = (raw.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).filter((w) => !STOP.has(w)).slice(0, 8);
+  return words.length ? words.map((w) => `"${w}"*`).join(' ') : null;
+}
+
+export async function searchCompanies(env: Env, raw: string, page: number): Promise<{ total: number; companies: CompanyCard[] }> {
+  const q = ftsQuery(raw);
+  if (!q) return { total: 0, companies: [] };
+  const [c, r] = await env.DB.batch([
+    env.DB.prepare('SELECT COUNT(*) AS n FROM company_search WHERE company_search MATCH ?').bind(q),
+    env.DB.prepare(
+      `SELECT c.id, c.slug, c.name, c.description, c.city, c.state, c.state_slug, c.country, c.country_slug,
+              c.employee_count, c.revenue_tier, c.claimed_status, c.year_founded, c.company_type
+         FROM company_search s JOIN companies c ON c.id = s.rowid
+        WHERE company_search MATCH ?
+        ORDER BY bm25(company_search, 10.0, 2.0, 2.0, 2.0, 5.0, 1.0, 3.0), c.claimed_status DESC
+        LIMIT ? OFFSET ?`
+    ).bind(q, PAGE_SIZE, (page - 1) * PAGE_SIZE),
+  ]);
+  return { total: (c.results[0] as { n: number }).n, companies: r.results as unknown as CompanyCard[] };
 }

@@ -81,8 +81,21 @@ for (let i = 1; i < rows.length; i++) {
   let n = 2; const base = slug;
   while (usedSlugs.has(slug)) slug = `${base}-${n++}`;
   usedSlugs.add(slug);
-  const tier = col(r, 'revenue_tier').toLowerCase();
+  const tierRaw = col(r, 'revenue_tier');
+  const tier = tierRaw.toLowerCase();
+  const yr = num(col(r, 'year_founded'), true);
+  const typeRaw = col(r, 'company_type').toLowerCase();
+  const TYPE = typeRaw.includes('custom') ? 'Custom Manufacturer' : typeRaw.includes('manufactur') ? 'Manufacturer' : typeRaw.includes('distrib') ? 'Distributor' : typeRaw.includes('service') ? 'Service Company' : typeRaw ? 'Other' : null;
+  const items = (v) => split(v).slice(0, 12).map((x) => x.slice(0, 60)).join(';') || null;
   records.push({
+    year_founded: yr && yr >= 1600 && yr <= new Date().getFullYear() ? yr : null,
+    company_type: TYPE,
+    // a revenue label such as "$25M+" is kept as text when it is not one of our fixed size bands
+    sales_range: (col(r, 'sales_range') || (TIERS.has(tier) ? '' : tierRaw)).slice(0, 40) || null,
+    industries: items(col(r, 'industries')),
+    capabilities: items(col(r, 'capabilities')),
+    products: items(col(r, 'products')),
+    data_source: col(r, 'data_source').slice(0, 40) || 'import',
     slug, name, city, state, country,
     description: col(r, 'description'), address: col(r, 'address'),
     country_code: col(r, 'country_code').toUpperCase() || country,
@@ -145,7 +158,7 @@ for (let i = 0; i < records.length; i += CHUNK) {
   const part = records.slice(i, i + CHUNK);
   const sql = [];
   for (const r of part)
-    sql.push(`INSERT OR IGNORE INTO companies (slug, name, description, address, city, state, state_slug, country, country_code, country_slug, lat, lng, website, employee_count, revenue_tier, claimed_status) VALUES (${q(r.slug)}, ${q(r.name)}, ${q(r.description)}, ${q(r.address)}, ${q(r.city)}, ${q(r.state)}, ${q(r.state_slug)}, ${q(r.country)}, ${q(r.country_code)}, ${q(r.country_slug)}, ${r.lat ?? 'NULL'}, ${r.lng ?? 'NULL'}, ${q(r.website)}, ${r.employees ?? 'NULL'}, ${q(r.tier)}, 0);`);
+    sql.push(`INSERT OR IGNORE INTO companies (slug, name, description, address, city, state, state_slug, country, country_code, country_slug, lat, lng, website, employee_count, revenue_tier, claimed_status, year_founded, company_type, sales_range, industries, capabilities, products, data_source) VALUES (${q(r.slug)}, ${q(r.name)}, ${q(r.description)}, ${q(r.address)}, ${q(r.city)}, ${q(r.state)}, ${q(r.state_slug)}, ${q(r.country)}, ${q(r.country_code)}, ${q(r.country_slug)}, ${r.lat ?? 'NULL'}, ${r.lng ?? 'NULL'}, ${q(r.website)}, ${r.employees ?? 'NULL'}, ${q(r.tier)}, 0, ${r.year_founded ?? 'NULL'}, ${q(r.company_type)}, ${q(r.sales_range)}, ${q(r.industries)}, ${q(r.capabilities)}, ${q(r.products)}, ${q(r.data_source)});`);
   for (const r of part) {
     for (const c of r.cats)
       sql.push(`INSERT OR IGNORE INTO company_categories (category_id, company_id) SELECT cat.id, co.id FROM categories cat, companies co WHERE cat.slug = ${q(c)} AND co.slug = ${q(r.slug)};`);
@@ -156,6 +169,18 @@ for (let i = 0; i < records.length; i += CHUNK) {
   writeFileSync(f, sql.join('\n') + '\n');
   files.push(f);
 }
+
+const searchSql = `INSERT INTO company_search (rowid, name, city, state, country, categories, description, details)
+SELECT c.id, c.name, COALESCE(c.city,''), COALESCE(c.state,''), c.country,
+       COALESCE((SELECT group_concat(cat.name, ' ') FROM company_categories cc JOIN categories cat ON cat.id = cc.category_id WHERE cc.company_id = c.id), ''),
+       COALESCE(c.description,''),
+       TRIM(COALESCE(c.capabilities,'') || ' ' || COALESCE(c.industries,'') || ' ' || COALESCE(c.products,''))
+  FROM companies c
+ WHERE c.id NOT IN (SELECT rowid FROM company_search);
+`;
+const searchFile = `${outDir}/${String(files.length).padStart(3, '0')}-search-index.sql`;
+writeFileSync(searchFile, searchSql);
+files.push(searchFile);
 
 console.log(`\nRead ${rows.length - 1} rows -> ${records.length} companies ready, ${skipped.length} skipped.`);
 console.log(`Categories: ${cats.size} | Certifications: ${certs.size} | Locations: ${locations.size}`);

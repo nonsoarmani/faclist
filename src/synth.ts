@@ -197,6 +197,10 @@ export interface SupplierCtx {
   categories: string[];
   certs: { code: string; authority: string | null }[];
   nearby: CompanyCard[];
+  yearFounded?: number | null;
+  companyType?: string | null;
+  capabilities?: string[];
+  industries?: string[];
 }
 
 const TIER_LABEL: Record<string, string> = {
@@ -231,6 +235,21 @@ export function synthSupplier(c: SupplierCtx) {
   } else if (c.company.employee_count) {
     sentences.push(`The company employs around ${c.company.employee_count} people.`);
   }
+  const nowYear = new Date().getFullYear();
+  if (c.yearFounded && c.yearFounded <= nowYear) {
+    const yrs = nowYear - c.yearFounded;
+    sentences.push(
+      yrs >= 1
+        ? rng.pick([
+            `Founded in ${c.yearFounded}, the company has been in business for ${yrs} ${plural(yrs, 'year', 'years')}.`,
+            `${c.company.name} has been operating since ${c.yearFounded}.`,
+          ])
+        : `${c.company.name} was founded in ${c.yearFounded}.`
+    );
+  }
+  if (c.companyType) sentences.push(`It is listed as a ${c.companyType.toLowerCase()}.`);
+  if (c.capabilities?.length) sentences.push(`Listed capabilities include ${list(c.capabilities.slice(0, 4))}.`);
+  if (c.industries?.length) sentences.push(`The company serves customers in ${list(c.industries.slice(0, 4).map((x) => x.toLowerCase()))}.`);
   if (c.certs.length) {
     sentences.push(
       rng.pick([
