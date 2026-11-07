@@ -6,6 +6,7 @@ export interface Category {
   slug: string;
   meta_title_template: string;
   description_template: string;
+  section: 'manufacturing' | 'trade';
 }
 
 export interface Certification {
@@ -194,7 +195,7 @@ export async function loadListing(env: Env, f: Filter, page: number): Promise<Li
 
 export interface SupplierData {
   company: Company;
-  categories: { slug: string; name: string }[];
+  categories: { slug: string; name: string; section: string }[];
   certs: { slug: string; code: string; name: string; authority: string | null }[];
   related: CompanyCard[];
 }
@@ -205,7 +206,7 @@ export async function loadSupplier(env: Env, slug: string): Promise<SupplierData
 
   const [cats, certs, rel] = await env.DB.batch([
     env.DB.prepare(
-      `SELECT cat.slug, cat.name FROM company_categories cc JOIN categories cat ON cat.id = cc.category_id
+      `SELECT cat.slug, cat.name, cat.section FROM company_categories cc JOIN categories cat ON cat.id = cc.category_id
         WHERE cc.company_id = ? ORDER BY cat.id`
     ).bind(company.id),
     env.DB.prepare(
@@ -231,37 +232,57 @@ export async function loadSupplier(env: Env, slug: string): Promise<SupplierData
   };
 }
 
-/* ---------- homepage ---------- */
+/* ---------- homepage and sections ---------- */
 
-export interface HomeData {
+export type SectionName = 'manufacturing' | 'trade';
+
+export interface SectionData {
   total: number;
   categories: { slug: string; name: string; n: number }[];
   countries: { slug: string; name: string; n: number; cat_slug: string | null }[];
 }
 
-export async function getHomeData(env: Env): Promise<HomeData> {
-  const [t, cats, ctry] = await env.DB.batch([
-    env.DB.prepare('SELECT COUNT(*) AS n FROM companies'),
+export interface HomeData extends SectionData {
+  trade: { total: number; categories: { slug: string; name: string; n: number }[] };
+}
+
+/** Categories, company count and (optionally) countries for one section of the site. */
+export async function getSectionData(env: Env, section: SectionName, withCountries = true): Promise<SectionData> {
+  const stmts = [
+    env.DB.prepare(
+      `SELECT COUNT(DISTINCT cc.company_id) AS n FROM company_categories cc JOIN categories k ON k.id = cc.category_id WHERE k.section = ?`
+    ).bind(section),
     env.DB.prepare(
       `SELECT cat.slug, cat.name, COUNT(cc.company_id) AS n
          FROM categories cat LEFT JOIN company_categories cc ON cc.category_id = cat.id
-        GROUP BY cat.id ORDER BY n DESC, cat.name`
-    ),
-    env.DB.prepare(
-      `SELECT c.country_slug AS slug, c.country AS name, COUNT(*) AS n,
-              (SELECT cat.slug FROM company_categories cc2
-                 JOIN categories cat ON cat.id = cc2.category_id
-                 JOIN companies c2 ON c2.id = cc2.company_id
-                WHERE c2.country_slug = c.country_slug
-                GROUP BY cat.id ORDER BY COUNT(*) DESC LIMIT 1) AS cat_slug
-         FROM companies c GROUP BY c.country_slug ORDER BY n DESC, name LIMIT 60`
-    ),
-  ]);
+        WHERE cat.section = ? GROUP BY cat.id ORDER BY n DESC, cat.name`
+    ).bind(section),
+    withCountries
+      ? env.DB.prepare(
+          `SELECT c.country_slug AS slug, c.country AS name, COUNT(*) AS n,
+                  (SELECT cat.slug FROM company_categories cc2
+                     JOIN categories cat ON cat.id = cc2.category_id
+                     JOIN companies c2 ON c2.id = cc2.company_id
+                    WHERE c2.country_slug = c.country_slug AND cat.section = ?
+                    GROUP BY cat.id ORDER BY COUNT(*) DESC LIMIT 1) AS cat_slug
+             FROM companies c
+            WHERE EXISTS (SELECT 1 FROM company_categories cc JOIN categories k ON k.id = cc.category_id
+                           WHERE cc.company_id = c.id AND k.section = ?)
+            GROUP BY c.country_slug ORDER BY n DESC, name LIMIT 60`
+        ).bind(section, section)
+      : env.DB.prepare('SELECT 1 AS x WHERE 0'),
+  ];
+  const [t, cats, ctry] = await env.DB.batch(stmts);
   return {
     total: (t.results[0] as { n: number }).n,
-    categories: cats.results as unknown as HomeData['categories'],
-    countries: ctry.results as unknown as HomeData['countries'],
+    categories: cats.results as unknown as SectionData['categories'],
+    countries: withCountries ? (ctry.results as unknown as SectionData['countries']) : [],
   };
+}
+
+export async function getHomeData(env: Env): Promise<HomeData> {
+  const [m, t] = await Promise.all([getSectionData(env, 'manufacturing'), getSectionData(env, 'trade', false)]);
+  return { ...m, trade: { total: t.total, categories: t.categories } };
 }
 
 /* ---------- search ---------- */

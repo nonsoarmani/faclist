@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS categories (
   name                  TEXT NOT NULL,
   slug                  TEXT NOT NULL UNIQUE,
   meta_title_template   TEXT NOT NULL,
-  description_template  TEXT NOT NULL
+  description_template  TEXT NOT NULL,
+  section               TEXT NOT NULL DEFAULT 'manufacturing'   -- 'manufacturing' or 'trade' (Import & Export)
 );
 
 CREATE TABLE IF NOT EXISTS certifications (

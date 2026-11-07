@@ -56,7 +56,7 @@ export async function handleSitemap(path: string, env: Env, origin: string): Pro
     const r = await env.DB.prepare(
       `SELECT cat.slug FROM categories cat WHERE EXISTS (SELECT 1 FROM company_categories cc WHERE cc.category_id = cat.id) ORDER BY cat.slug`
     ).all<{ slug: string }>();
-    return urlset([{ loc: `${origin}/` }, ...r.results.map((c) => ({ loc: `${origin}/directory/${c.slug}` }))]);
+    return urlset([{ loc: `${origin}/` }, { loc: `${origin}/import-export` }, ...r.results.map((c) => ({ loc: `${origin}/directory/${c.slug}` }))]);
   }
 
   const sup = path.match(/^\/sitemap-([a-z0-9-]+)-suppliers-(\d+)\.xml$/);

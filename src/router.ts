@@ -1,7 +1,7 @@
 import type { Env } from './env';
-import { getCategory, getCertification, getHomeCategories, getHomeData, getLocation, loadListing, loadSupplier, searchCompanies } from './db';
+import { getCategory, getCertification, getHomeCategories, getHomeData, getSectionData, getLocation, loadListing, loadSupplier, searchCompanies } from './db';
 import { handleSitemap } from './sitemap';
-import { renderHome, renderListing, renderSearch, renderSupplier, layout } from './render';
+import { renderHome, renderListing, renderSearch, renderSection, renderSupplier, layout } from './render';
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const CACHE = 'public, max-age=300, s-maxage=3600';
@@ -58,6 +58,10 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
   try {
     if (seg.length === 0) return html(renderHome(origin, await getHomeData(env)));
+
+    if (seg[0] === 'import-export' && seg.length === 1) {
+      return html(renderSection(origin, await getSectionData(env, 'trade')));
+    }
 
     if (seg[0] === 'search' && seg.length === 1) {
       const q = (url.searchParams.get('q') ?? '').trim().slice(0, 100);

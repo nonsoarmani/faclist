@@ -92,10 +92,25 @@ const CLOSINGS = [
   'Shortlist two or three suppliers from the list below, then check their profiles for certifications and company size before reaching out.',
 ];
 
+const OPENINGS_TRADE = [
+  '{{category}}{{place}}: FacList lists {{count}} {{noun}} with a website, location and company size so buyers can build a shortlist quickly.',
+  'Looking for {{category_lower}}{{place}}? This page lists {{count}} {{noun}} you can compare side by side.',
+  'Buyers and sourcing teams use this page to find {{category_lower}}{{place}}. {{count}} {{noun}} are listed right now.',
+  '{{count}} {{noun}} under {{category}}{{place}} are listed below, ordered by verified status and company size.',
+];
+
+const CLOSINGS_TRADE = [
+  'Open any profile to see where the company is based and how large it is, or narrow the list using the related links on this page.',
+  'Use the profiles below to compare companies before you get in touch.',
+  'Each listing links to a full company profile, and the related searches on this page help you refine by region.',
+  'Shortlist two or three companies from the list below, then check their profiles and websites before reaching out.',
+];
+
 export function synthListing(c: ListingCtx): ListingCopy {
   const rng = makeRng(c.path);
+  const trade = c.category.section === 'trade';
   const catLower = c.category.name.toLowerCase();
-  const noun = plural(c.count, 'manufacturer', 'manufacturers');
+  const noun = trade ? plural(c.count, 'company', 'companies') : plural(c.count, 'manufacturer', 'manufacturers');
   const place = c.location ? ` in ${c.location.name}` : '';
   const certified = c.cert ? ` - ${c.cert.code} Certified` : '';
   const withCert = c.cert ? ` with ${c.cert.code} certification` : '';
@@ -114,18 +129,20 @@ export function synthListing(c: ListingCtx): ListingCopy {
 
   const title = fill(c.category.meta_title_template, vars);
   const metaDescription = fill(c.category.description_template, vars);
-  const h1 = `${c.category.name} Manufacturers${place}${c.cert ? ` with ${c.cert.code} Certification` : ''}`;
+  const h1 = trade
+    ? `${c.category.name}${place}`
+    : `${c.category.name} Manufacturers${place}${c.cert ? ` with ${c.cert.code} Certification` : ''}`;
 
   // data-driven sentences, order shuffled per URL
   const facts: string[] = [];
   if (c.topCities.length) {
     facts.push(
       fill(
-        rng.pick([
-          'Production is concentrated around {{cities}}.',
-          'The biggest clusters of suppliers are in {{cities}}.',
-          'Most listed shops operate out of {{cities}}.',
-        ]),
+        rng.pick(
+          trade
+            ? ['The biggest clusters of companies are in {{cities}}.', 'Most listed companies operate from {{cities}}.']
+            : ['Production is concentrated around {{cities}}.', 'The biggest clusters of suppliers are in {{cities}}.', 'Most listed shops operate out of {{cities}}.']
+        ),
         { cities: list(c.topCities.slice(0, 3)) }
       )
     );
@@ -135,7 +152,7 @@ export function synthListing(c: ListingCtx): ListingCopy {
       fill(
         rng.pick([
           'The average listed company employs about {{avg}} people.',
-          'Typical headcount across these suppliers is roughly {{avg}} employees.',
+          trade ? 'Typical headcount across these companies is roughly {{avg}} employees.' : 'Typical headcount across these suppliers is roughly {{avg}} employees.',
         ]),
         { avg: Math.round(c.avgEmployees) }
       )
@@ -156,21 +173,26 @@ export function synthListing(c: ListingCtx): ListingCopy {
   }
 
   const paragraphs = [
-    fill(rng.pick(OPENINGS), vars),
+    fill(rng.pick(trade ? OPENINGS_TRADE : OPENINGS), vars),
     rng.shuffle(facts).join(' '),
-    rng.pick(CLOSINGS),
+    rng.pick(trade ? CLOSINGS_TRADE : CLOSINGS),
   ];
 
   const faq: { q: string; a: string }[] = [
-    {
-      q: `How many ${catLower} manufacturers are listed${place}${withCert}?`,
-      a: `FacList currently lists ${c.count} ${noun} offering ${catLower}${place}${withCert}.`,
-    },
+    trade
+      ? {
+          q: `How many ${catLower} are listed${place}?`,
+          a: `FacList currently lists ${c.count} ${noun} under ${c.category.name}${place}.`,
+        }
+      : {
+          q: `How many ${catLower} manufacturers are listed${place}${withCert}?`,
+          a: `FacList currently lists ${c.count} ${noun} offering ${catLower}${place}${withCert}.`,
+        },
   ];
   if (c.topCities.length) {
     faq.push({
-      q: `Which cities have the most ${catLower} suppliers${place}?`,
-      a: `${list(c.topCities.slice(0, 3))} ${c.topCities.length === 1 ? 'has' : 'have'} the largest number of listed ${catLower} suppliers${place}.`,
+      q: trade ? `Which cities have the most ${catLower}${place}?` : `Which cities have the most ${catLower} suppliers${place}?`,
+      a: `${list(c.topCities.slice(0, 3))} ${c.topCities.length === 1 ? 'has' : 'have'} the largest number of listed ${trade ? catLower : catLower + ' suppliers'}${place}.`,
     });
   }
   if (c.cert?.description) {
@@ -201,6 +223,7 @@ export interface SupplierCtx {
   companyType?: string | null;
   capabilities?: string[];
   industries?: string[];
+  section?: string;
 }
 
 const TIER_LABEL: Record<string, string> = {
@@ -219,17 +242,22 @@ export function synthSupplier(c: SupplierCtx) {
   const rng = makeRng(c.path);
   const where = [...new Set([c.company.city, c.company.state, c.company.country].filter(Boolean))].join(', ');
   const cats = c.categories.map((x) => x.toLowerCase());
-  const primary = c.categories[0] ?? 'Manufacturing';
+  const trade = c.section === 'trade';
+  const primary = c.categories[0] ?? (trade ? 'Import & Export' : 'Manufacturing');
 
   const sentences: string[] = [];
   sentences.push(
-    rng.pick([
+    rng.pick(trade ? [
+      `${c.company.name} is based in ${where} and is listed under ${list(c.categories)}.`,
+      `Based in ${where}, ${c.company.name} appears in our ${list(cats)} listings.`,
+      `${c.company.name} operates from ${where} and is listed under ${list(c.categories)}.`,
+    ] : [
       `${c.company.name} is a ${cats.length ? list(cats) : 'manufacturing'} supplier based in ${where}.`,
       `Based in ${where}, ${c.company.name} offers ${cats.length ? list(cats) : 'manufacturing services'}.`,
       `${c.company.name} provides ${cats.length ? list(cats) : 'manufacturing services'} from its location in ${where}.`,
     ])
   );
-  const tier = tierLabel(c.company.revenue_tier);
+  const tier = trade ? null : tierLabel(c.company.revenue_tier);
   if (c.company.employee_count && tier) {
     sentences.push(`The company is ${tier} with around ${c.company.employee_count} employees.`);
   } else if (c.company.employee_count) {
@@ -265,12 +293,12 @@ export function synthSupplier(c: SupplierCtx) {
   );
   if (c.nearby.length) {
     sentences.push(
-      `Other ${primary.toLowerCase()} suppliers in ${c.company.country} include ${list(c.nearby.slice(0, 3).map((n) => n.name))}.`
+      `Other ${trade ? 'companies listed under ' + primary : primary.toLowerCase() + ' suppliers'} in ${c.company.country} include ${list(c.nearby.slice(0, 3).map((n) => n.name))}.`
     );
   }
 
   return {
-    title: `${c.company.name} - ${primary} Manufacturer in ${[...new Set([c.company.city, c.company.state ?? c.company.country].filter(Boolean))].join(', ')} | FacList`,
+    title: `${c.company.name} - ${primary}${trade ? '' : ' Manufacturer'} in ${[...new Set([c.company.city, c.company.state ?? c.company.country].filter(Boolean))].join(', ')} | FacList`,
     metaDescription: `${sentences.slice(0, 2).join(' ')} View credentials and request a quote on FacList.`.slice(0, 300),
     paragraphs: [sentences.slice(0, 3).join(' '), sentences.slice(3).join(' ')].filter(Boolean),
     where,

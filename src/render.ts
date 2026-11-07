@@ -1,4 +1,4 @@
-import type { CompanyCard, SupplierData, ListingData, Category, Certification, Location, HomeData } from './db';
+import type { CompanyCard, SupplierData, ListingData, Category, Certification, Location, HomeData, SectionData } from './db';
 import { PAGE_SIZE } from './db';
 import { synthListing, synthSupplier } from './synth';
 
@@ -149,7 +149,7 @@ ${jsonLd(o.schema)}
 <header class="site"><div class="wrap bar">
 <a class="logo" href="/">${LOGO}FacList</a>
 <form class="hsearch" action="/search" method="get" role="search"><input type="search" name="q" maxlength="100" placeholder="Search e.g. CNC machining Lagos" aria-label="Search suppliers"></form>
-<nav class="main nav-hide"><a href="/#categories">Categories</a><a href="/#countries">Countries</a><a href="/#why">Why FacList</a></nav>
+<nav class="main nav-hide"><a href="/#categories">Categories</a><a href="/#countries">Countries</a><a href="/import-export">Import &amp; Export</a></nav>
 </div></header>
 ${o.body}
 <footer class="site"><div class="wrap"><a href="/"><b>FacList</b></a> &middot; Global manufacturing and supplier directory &middot; &copy; ${new Date().getFullYear()}<br>Some listing data &copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap contributors</a></div></footer>
@@ -201,25 +201,34 @@ ${full ? `<p>${esc(full.slice(0, 190))}${full.length > 190 ? '&hellip;' : ''}</p
 
 /* ---------- home ---------- */
 
+const tile = (c: { slug: string; name: string; n: number }, unit = 'suppliers') =>
+  `<a class="tile" href="/directory/${esc(c.slug)}">${avatar(c.name)}<span><b>${esc(c.name)}</b><small>${c.n.toLocaleString('en-US')} ${unit}</small></span></a>`;
+
 export function renderHome(origin: string, d: HomeData): string {
+  const t = d.trade;
   const body = `<section class="hero"><div class="wrap">
 <h1>Find trusted manufacturers and suppliers worldwide</h1>
 <p class="lead">Compare verified factories by capability, country and certification, then go straight to the supplier that fits.</p>
 <form class="search" action="/search" method="get" role="search"><input type="search" name="q" maxlength="100" placeholder="e.g. sheet metal Lagos" aria-label="Search suppliers"><button class="btn" type="submit">Search</button></form>
 <div class="pop">Popular: ${d.categories.slice(0, 4).map((c) => `<a href="/directory/${esc(c.slug)}">${esc(c.name)}</a>`).join('')}</div>
-<div class="stats"><div><b>${d.total.toLocaleString('en-US')}</b><span>Suppliers listed</span></div><div><b>${d.categories.length}</b><span>Categories</span></div><div><b>${d.countries.length}</b><span>Countries</span></div></div>
+<div class="stats"><div><b>${d.total.toLocaleString('en-US')}</b><span>Suppliers listed</span></div>${
+    t.total ? `<div><b>${t.total.toLocaleString('en-US')}</b><span>Import &amp; export companies</span></div>` : ''
+  }<div><b>${d.categories.length}</b><span>Categories</span></div><div><b>${d.countries.length}</b><span>Countries</span></div></div>
 </div></section>
 <div class="wrap">
-<section class="block" id="categories"><h2 class="sec">Browse by category</h2><div class="grid">${d.categories
-    .map(
-      (c) =>
-        `<a class="tile" href="/directory/${esc(c.slug)}">${avatar(c.name)}<span><b>${esc(c.name)}</b><small>${c.n.toLocaleString('en-US')} suppliers</small></span></a>`
-    )
-    .join('')}</div></section>
+<section class="block" id="categories"><h2 class="sec">Browse manufacturing by category</h2><div class="grid">${d.categories.map((c) => tile(c)).join('')}</div></section>
 <section class="block" id="countries"><h2 class="sec">Browse by country</h2><ul class="chips">${d.countries
     .filter((c) => c.cat_slug)
     .map((c) => `<li><a href="/directory/${esc(c.cat_slug)}/${esc(c.slug)}">${esc(c.name)} (${c.n.toLocaleString('en-US')})</a></li>`)
     .join('')}</ul></section>
+${
+  t.total
+    ? `<section class="block" id="trade"><h2 class="sec">Import &amp; export directory</h2>
+<p style="margin:-8px 0 18px;color:#475569;max-width:720px">Looking for exporters, importers, trading companies or freight and logistics partners? Browse ${t.total.toLocaleString('en-US')} companies by category and country.</p>
+<div class="grid">${t.categories.filter((c) => c.n > 0).map((c) => tile(c, 'companies')).join('')}</div>
+<p style="margin-top:16px"><a class="btn blue" href="/import-export">Browse Import &amp; Export &rarr;</a></p></section>`
+    : ''
+}
 <section class="block" id="why"><h2 class="sec">Why buyers use FacList</h2><div class="feat">
 <div><h3>Compare in minutes</h3><p>Every supplier has the same clear profile: location, size, capabilities and credentials.</p></div>
 <div><h3>Filter by certification</h3><p>Jump straight to suppliers holding ISO 9001, AS9100, IATF 16949 and more.</p></div>
@@ -231,11 +240,35 @@ export function renderHome(origin: string, d: HomeData): string {
     canonical: origin + '/',
     origin,
     body,
+    schema: { '@context': 'https://schema.org', '@type': 'WebSite', name: 'FacList', url: origin + '/' },
+  });
+}
+
+/* ---------- Import & Export section landing page ---------- */
+
+export function renderSection(origin: string, d: SectionData): string {
+  const crumbs = [{ name: 'Home', url: '/' }, { name: 'Import & Export', url: '/import-export' }];
+  const body = `<div class="pagehead"><div class="wrap">${crumbsHtml(crumbs)}
+<h1>Import &amp; Export Companies Directory</h1>
+<p>Find importers, exporters, trading companies and freight and logistics providers. ${d.total.toLocaleString('en-US')} companies are listed, each with its location, size and website.</p></div></div>
+<div class="wrap">
+<section class="block"><h2 class="sec">Browse by category</h2><div class="grid">${d.categories.filter((c) => c.n > 0).map((c) => tile(c, 'companies')).join('')}</div></section>
+<section class="block"><h2 class="sec">Browse by country</h2><ul class="chips">${d.countries
+    .filter((c) => c.cat_slug)
+    .map((c) => `<li><a href="/directory/${esc(c.cat_slug)}/${esc(c.slug)}">${esc(c.name)} (${c.n.toLocaleString('en-US')})</a></li>`)
+    .join('')}</ul></section></div>`;
+  return layout({
+    title: 'Import & Export Companies Directory | FacList',
+    description: `Directory of ${d.total.toLocaleString('en-US')} importers, exporters, trading companies and freight and logistics providers, by country.`,
+    canonical: origin + '/import-export',
+    origin,
+    body,
     schema: {
       '@context': 'https://schema.org',
-      '@type': 'WebSite',
-      name: 'FacList',
-      url: origin + '/',
+      '@graph': [
+        { '@type': 'CollectionPage', name: 'Import & Export Companies Directory', url: origin + '/import-export', isPartOf: { '@type': 'WebSite', name: 'FacList', url: origin + '/' } },
+        crumbsLd(origin, crumbs),
+      ],
     },
   });
 }
@@ -269,8 +302,11 @@ export function renderListing(i: ListingInput): string {
     otherCerts: data.certFacets.filter((c) => c.slug !== cert?.slug).map((c) => c.code),
   });
 
+  const trade = category.section === 'trade';
+  const unit = trade ? ['company', 'companies'] : ['supplier', 'suppliers'];
   const crumbs = [
     { name: 'Home', url: '/' },
+    ...(trade ? [{ name: 'Import & Export', url: '/import-export' }] : []),
     { name: category.name, url: `/directory/${category.slug}` },
     ...(location ? [{ name: location.name, url: `/directory/${category.slug}/${location.slug}` }] : []),
     ...(cert ? [{ name: cert.code, url: basePath }] : []),
@@ -310,7 +346,7 @@ export function renderListing(i: ListingInput): string {
 <aside>${fb(upBox)}${fb(locBox)}${fb(certBox)}</aside>
 <script>if(innerWidth<860)document.querySelectorAll('details.fbox').forEach(function(d){d.open=false})</script>
 <div>
-<div class="resulthead"><h2>${data.total.toLocaleString('en-US')} ${data.total === 1 ? 'supplier' : 'suppliers'} found</h2><span class="loc">${pages > 1 ? `Page ${page} of ${pages}` : ''}</span></div>
+<div class="resulthead"><h2>${data.total.toLocaleString('en-US')} ${data.total === 1 ? unit[0] : unit[1]} found</h2><span class="loc">${pages > 1 ? `Page ${page} of ${pages}` : ''}</span></div>
 ${data.companies.map(resultCard).join('')}
 ${
   pages > 1
@@ -432,11 +468,14 @@ export function renderSupplier(origin: string, d: SupplierData): string {
     companyType: c.company_type,
     capabilities: caps,
     industries: inds,
+    section: categories[0]?.section,
   });
 
   const primary = categories[0];
+  const trade = primary?.section === 'trade';
   const crumbs = [
     { name: 'Home', url: '/' },
+    ...(trade ? [{ name: 'Import & Export', url: '/import-export' }] : []),
     ...(primary ? [{ name: primary.name, url: `/directory/${primary.slug}` }] : []),
     { name: c.name, url: path },
   ];
@@ -454,7 +493,7 @@ export function renderSupplier(origin: string, d: SupplierData): string {
 <div class="wrap layout profile">
 <div>
 <div class="prose" style="margin-top:0"><h2>About ${esc(c.name)}</h2>${c.description ? `<p>${esc(c.description)}</p>` : ''}${copy.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}</div>
-<div class="prose"><h2>Capabilities</h2>${
+<div class="prose"><h2>${trade ? 'Categories' : 'Capabilities'}</h2>${
     caps.length ? `<ul class="list2">${caps.map((x) => `<li>${esc(x)}</li>`).join('')}</ul><br>` : ''
   }<ul class="chips">${categories.map((x) => `<li><a href="/directory/${esc(x.slug)}">${esc(x.name)}</a></li>`).join('')}${categories
     .map((x) => `<li><a href="/directory/${esc(x.slug)}/${esc(locSlug)}">${esc(x.name)} in ${esc(c.state ?? c.country)}</a></li>`)
@@ -472,7 +511,7 @@ ${
         .join('')}</ul></div>`
     : ''
 }
-${related.length ? `<h2 class="sec" style="margin-top:28px">Similar suppliers nearby</h2>${related.map(resultCard).join('')}` : ''}
+${related.length ? `<h2 class="sec" style="margin-top:28px">${trade ? 'Similar companies nearby' : 'Similar suppliers nearby'}</h2>${related.map(resultCard).join('')}` : ''}
 </div>
 <aside><div class="box"><h3>Company facts</h3>
 ${fact('Location', esc(uniq([c.city, c.state, c.country]).join(', ')))}

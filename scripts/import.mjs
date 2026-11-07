@@ -95,6 +95,7 @@ for (let i = 1; i < rows.length; i++) {
     industries: items(col(r, 'industries')),
     capabilities: items(col(r, 'capabilities')),
     products: items(col(r, 'products')),
+    section: col(r, 'section').toLowerCase() === 'trade' ? 'trade' : 'manufacturing',
     data_source: col(r, 'data_source').slice(0, 40) || 'import',
     employee_range: /^\d[\d,]*(-\d[\d,]*|\+)?$/.test(col(r, 'employee_range')) ? col(r, 'employee_range').replace(/,/g, '') : null,
     slug, name, city, state, country,
@@ -132,9 +133,10 @@ for (const r of records) {
 
 /* ---------- categories & certifications ---------- */
 const cats = new Map();
+const catSection = new Map();
 const certs = new Map();
 for (const r of records) {
-  r.cats = [...new Set(r.cats.map((c) => { const s = slugify(c); if (s) cats.set(s, c); return s; }).filter(Boolean))];
+  r.cats = [...new Set(r.cats.map((c) => { const s = slugify(c); if (s) { cats.set(s, c); if (!catSection.has(s)) catSection.set(s, r.section); } return s; }).filter(Boolean))];
   r.certs = [...new Set(r.certs.filter(Boolean))];
   r.certs.forEach((c) => certs.set(c, c));
 }
@@ -146,8 +148,14 @@ mkdirSync(outDir, { recursive: true });
 const files = [];
 
 const ref = [];
-for (const [slug, name] of cats)
-  ref.push(`INSERT OR IGNORE INTO categories (name, slug, meta_title_template, description_template) VALUES (${q(name)}, ${q(slug)}, '{{category}} Suppliers{{place}}{{certified}} ({{count}} Listed) | FacList', 'Compare {{count}} {{category_lower}} {{noun}}{{place}}{{certified}}. Browse capabilities, certifications and company size, then request a quote.');`);
+for (const [slug, name] of cats) {
+  const trade = catSection.get(slug) === 'trade';
+  const title = trade ? '{{category}}{{place}} ({{count}} Companies) | FacList' : '{{category}} Suppliers{{place}}{{certified}} ({{count}} Listed) | FacList';
+  const desc = trade
+    ? 'Browse {{count}} {{category_lower}}{{place}}. Compare companies by location, size and founding year.'
+    : 'Compare {{count}} {{category_lower}} {{noun}}{{place}}{{certified}}. Browse capabilities, certifications and company size, then request a quote.';
+  ref.push(`INSERT OR IGNORE INTO categories (name, slug, section, meta_title_template, description_template) VALUES (${q(name)}, ${q(slug)}, ${q(trade ? 'trade' : 'manufacturing')}, ${q(title)}, ${q(desc)});`);
+}
 for (const code of certs.keys())
   ref.push(`INSERT OR IGNORE INTO certifications (name, code, slug, authority) VALUES (${q(code.replace(/-/g, ' '))}, ${q(code)}, ${q(code.toLowerCase())}, ${q(AUTH[code] ?? null)});`);
 for (const l of locations.values())

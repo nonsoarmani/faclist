@@ -8,16 +8,21 @@
 //          --limit 7000   --skip 14000   (take the next batch: skip the first 14,000 good companies, keep the next 7,000)
 //          --pick 3500   choose the best 3,500 (most complete, most relevant, spread over the biggest countries and regions)
 //          --profile electrical | --prefer-words "cable,circuit"   names containing these words rank higher
+//          --match-words "cnc,machining"   keep ONLY companies whose name contains one of these words
+//          --exclude-words "software,recruit"   drop companies whose name contains one of these words
+//          --section trade   put the companies in the Import & Export section
+//          --auto-categories trade   sort companies into Freight & Logistics / Trading Companies / Importers & Exporters by name
 //          --top-countries 8   --top-regions 12   (how widely --pick spreads)
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 
 const argv = process.argv.slice(2);
 const opt = (n) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : undefined; };
 const flag = (n) => argv.includes(`--${n}`);
-const valIdx = new Set(['--category', '--type', '--out', '--limit', '--skip', '--pick', '--profile', '--prefer-words', '--top-countries', '--top-regions'].map((f) => argv.indexOf(f) + 1).filter((i) => i > 0));
+const valIdx = new Set(['--category', '--type', '--out', '--limit', '--skip', '--pick', '--profile', '--prefer-words', '--section', '--auto-categories', '--match-words', '--exclude-words', '--top-countries', '--top-regions'].map((f) => argv.indexOf(f) + 1).filter((i) => i > 0));
 const input = argv.find((a, i) => !a.startsWith('--') && !valIdx.has(i));
 const category = opt('category');
-if (!input || !category) {
+const auto = opt('auto-categories');
+if (!input || (!category && !auto)) {
   console.log('Usage: npm run prep -- "<file.csv>" --category "Category name" [--type Distributor] [--limit 5000]');
   console.log('(If your download is a .zip, right-click it, choose Extract All, and use the .csv inside.)');
   process.exit(1);
@@ -32,6 +37,14 @@ const PROFILES = {
 };
 const words = (opt('prefer-words') ?? PROFILES[opt('profile') ?? ''] ?? '').split(',').map((w) => w.trim()).filter(Boolean);
 const PREFER = words.length ? new RegExp(words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'i') : null;
+const toRx = (v) => { const w = (v ?? '').split(',').map((x) => x.trim()).filter(Boolean); return w.length ? new RegExp(w.map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'i') : null; };
+const MATCH = toRx(opt('match-words')), EXCLUDE = toRx(opt('exclude-words'));
+const TRADE_RULES = [
+  ['Freight & Logistics Companies', /logistic|freight|shipping|forward|cargo|customs|courier|transport|shipment|supply chain/i],
+  ['Trading Companies', /trading|traders|\btrade\b|merchant|commodit/i],
+  ['Importers & Exporters', /./],
+];
+const autoCategory = (name) => (TRADE_RULES.find(([, re]) => re.test(name)) ?? TRADE_RULES.at(-1))[0];
 const SIZE_SCORE = { '1-10': 0, '11-50': 1, '51-200': 2, '201-500': 3 };
 
 /* ---------- csv ---------- */
@@ -93,9 +106,9 @@ const head = rows[0].map((h) => h.trim().toLowerCase());
 for (const need of ['name', 'country']) if (!head.includes(need)) { console.error(`This does not look like the expected export (missing "${need}" column). Columns found: ${head.join(', ')}`); process.exit(1); }
 const get = (r, k) => (r[head.indexOf(k)] ?? '').trim();
 
-const drop = { noName: 0, noLatin: 0, noCountry: 0, noSite: 0, noLoc: 0, noise: 0, dupe: 0 };
+const drop = { noMatch: 0, noName: 0, noLatin: 0, noCountry: 0, noSite: 0, noLoc: 0, noise: 0, dupe: 0 };
 const seen = new Set();
-const cols = ['name', 'description', 'address', 'city', 'state', 'country', 'country_code', 'website', 'employee_count', 'revenue_tier', 'lat', 'lng', 'categories', 'certifications', 'year_founded', 'company_type', 'employee_range', 'data_source'];
+const cols = ['name', 'description', 'address', 'city', 'state', 'country', 'country_code', 'website', 'employee_count', 'revenue_tier', 'lat', 'lng', 'categories', 'certifications', 'year_founded', 'company_type', 'employee_range', 'data_source', 'section'];
 const cands = [];
 const thisYear = new Date().getFullYear();
 for (let i = 1; i < rows.length; i++) {
@@ -109,6 +122,8 @@ for (let i = 1; i < rows.length; i++) {
   if (!site && !flag('allow-no-website')) { drop.noSite++; continue; }
   const city = titleCase(get(r, 'locality')), state = titleCase(get(r, 'region'));
   if (!city && !state && !flag('allow-no-location')) { drop.noLoc++; continue; }
+  if (MATCH && !MATCH.test(rawName)) { drop.noMatch++; continue; }
+  if (EXCLUDE && EXCLUDE.test(rawName)) { drop.noise++; continue; }
   if (!flag('no-noise-filter') && NOISE.test(rawName)) { drop.noise++; continue; }
   const key = site || `${rawName}|${countryRaw}|${city}`;
   if (seen.has(key)) { drop.dupe++; continue; }
@@ -120,9 +135,9 @@ for (let i = 1; i < rows.length; i++) {
     name: titleCase(rawName, true), description: '', address: '', city, state,
     country: titleCase(countryRaw), country_code: CODE.get(countryRaw) ?? '',
     website: site, employee_count: '', revenue_tier: '', lat: '', lng: '',
-    categories: category, certifications: '',
+    categories: auto ? autoCategory(rawName) : category, certifications: '',
     year_founded: yr >= 1800 && yr <= thisYear ? yr : '',
-    company_type: opt('type') ?? '', employee_range: get(r, 'size'), data_source: 'gigasheet',
+    company_type: opt('type') ?? '', employee_range: get(r, 'size'), data_source: 'gigasheet', section: opt('section') ?? '',
   });
 }
 function pickBest(list, n) {
@@ -143,14 +158,26 @@ function pickBest(list, n) {
   }
   return out;
 }
-const outRows = pickN ? pickBest(cands, pickN) : cands.slice(skip, skip + limit);
+function pickPerCategory(list, n) {
+  const groups = new Map();
+  for (const x of list) { if (!groups.has(x.categories)) groups.set(x.categories, []); groups.get(x.categories).push(x); }
+  const quota = Math.floor(n / groups.size);
+  const out = [];
+  for (const arr of groups.values()) out.push(...pickBest(arr, Math.min(quota, arr.length)));
+  const left = n - out.length;
+  if (left > 0) { const used = new Set(out); const rest = list.filter((x) => !used.has(x)); if (rest.length) out.push(...pickBest(rest, Math.min(left, rest.length))); }
+  return out;
+}
+const outRows = pickN ? (auto ? pickPerCategory(cands, pickN) : pickBest(cands, pickN)) : cands.slice(skip, skip + limit);
 const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
 mkdirSync('data', { recursive: true });
 writeFileSync(out, [cols.join(','), ...outRows.map((o) => cols.map((c) => esc(o[c])).join(','))].join('\n') + '\n');
 
 const countries = new Map(); outRows.forEach((o) => countries.set(o.country, (countries.get(o.country) ?? 0) + 1));
 console.log(`\nRead ${rows.length - 1} rows -> kept ${outRows.length} companies, saved to ${out}`);
-console.log(`Left out: ${drop.noSite} no real website, ${drop.noCountry} no country, ${drop.noLoc} no city or region, ${drop.noise} off-topic names, ${drop.noLatin} non-English names, ${drop.dupe} duplicates, ${drop.noName} bad names.`);
+console.log(`Left out: ${drop.noMatch ? drop.noMatch + ' names without your match words, ' : ''}${drop.noSite} no real website, ${drop.noCountry} no country, ${drop.noLoc} no city or region, ${drop.noise} off-topic names, ${drop.noLatin} non-English names, ${drop.dupe} duplicates, ${drop.noName} bad names.`);
+const byCat = new Map(); outRows.forEach((o) => byCat.set(o.categories, (byCat.get(o.categories) ?? 0) + 1));
+if (byCat.size > 1) console.log(`By category: ${[...byCat].map(([c, n]) => `${c} ${n}`).join(', ')}`);
 console.log(`Top countries: ${[...countries].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([c, n]) => `${c} ${n}`).join(', ')}`);
 console.log(`With a founding year: ${outRows.filter((o) => o.year_founded).length}. Unknown country codes: ${outRows.filter((o) => !o.country_code).length}.`);
 console.log(`\nNext: open ${out} and skim a few rows, then run\n  npm run import -- ${out} --dry\n  npm run import -- ${out}`);
