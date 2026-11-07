@@ -52,7 +52,8 @@ CREATE TABLE IF NOT EXISTS companies (
   industries      TEXT,
   capabilities    TEXT,
   products        TEXT,
-  data_source     TEXT
+  data_source     TEXT,
+  employee_range  TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_companies_country ON companies (country_slug);

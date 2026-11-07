@@ -96,6 +96,7 @@ for (let i = 1; i < rows.length; i++) {
     capabilities: items(col(r, 'capabilities')),
     products: items(col(r, 'products')),
     data_source: col(r, 'data_source').slice(0, 40) || 'import',
+    employee_range: /^\d[\d,]*(-\d[\d,]*|\+)?$/.test(col(r, 'employee_range')) ? col(r, 'employee_range').replace(/,/g, '') : null,
     slug, name, city, state, country,
     description: col(r, 'description'), address: col(r, 'address'),
     country_code: col(r, 'country_code').toUpperCase() || country,
@@ -158,7 +159,7 @@ for (let i = 0; i < records.length; i += CHUNK) {
   const part = records.slice(i, i + CHUNK);
   const sql = [];
   for (const r of part)
-    sql.push(`INSERT OR IGNORE INTO companies (slug, name, description, address, city, state, state_slug, country, country_code, country_slug, lat, lng, website, employee_count, revenue_tier, claimed_status, year_founded, company_type, sales_range, industries, capabilities, products, data_source) VALUES (${q(r.slug)}, ${q(r.name)}, ${q(r.description)}, ${q(r.address)}, ${q(r.city)}, ${q(r.state)}, ${q(r.state_slug)}, ${q(r.country)}, ${q(r.country_code)}, ${q(r.country_slug)}, ${r.lat ?? 'NULL'}, ${r.lng ?? 'NULL'}, ${q(r.website)}, ${r.employees ?? 'NULL'}, ${q(r.tier)}, 0, ${r.year_founded ?? 'NULL'}, ${q(r.company_type)}, ${q(r.sales_range)}, ${q(r.industries)}, ${q(r.capabilities)}, ${q(r.products)}, ${q(r.data_source)});`);
+    sql.push(`INSERT OR IGNORE INTO companies (slug, name, description, address, city, state, state_slug, country, country_code, country_slug, lat, lng, website, employee_count, revenue_tier, claimed_status, year_founded, company_type, sales_range, industries, capabilities, products, data_source, employee_range) VALUES (${q(r.slug)}, ${q(r.name)}, ${q(r.description)}, ${q(r.address)}, ${q(r.city)}, ${q(r.state)}, ${q(r.state_slug)}, ${q(r.country)}, ${q(r.country_code)}, ${q(r.country_slug)}, ${r.lat ?? 'NULL'}, ${r.lng ?? 'NULL'}, ${q(r.website)}, ${r.employees ?? 'NULL'}, ${q(r.tier)}, 0, ${r.year_founded ?? 'NULL'}, ${q(r.company_type)}, ${q(r.sales_range)}, ${q(r.industries)}, ${q(r.capabilities)}, ${q(r.products)}, ${q(r.data_source)}, ${q(r.employee_range)});`);
   for (const r of part) {
     for (const c of r.cats)
       sql.push(`INSERT OR IGNORE INTO company_categories (category_id, company_id) SELECT cat.id, co.id FROM categories cat, companies co WHERE cat.slug = ${q(c)} AND co.slug = ${q(r.slug)};`);

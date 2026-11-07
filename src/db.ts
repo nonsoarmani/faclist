@@ -40,6 +40,7 @@ export interface CompanyCard {
   claimed_status: number;
   year_founded: number | null;
   company_type: string | null;
+  employee_range: string | null;
 }
 
 export interface Company extends CompanyCard {
@@ -147,7 +148,7 @@ export async function loadListing(env: Env, f: Filter, page: number): Promise<Li
     ).bind(...base.params),
     env.DB.prepare(
       `SELECT c.id, c.slug, c.name, c.description, c.city, c.state, c.state_slug, c.country, c.country_slug,
-              c.employee_count, c.revenue_tier, c.claimed_status, c.year_founded, c.company_type
+              c.employee_count, c.revenue_tier, c.claimed_status, c.year_founded, c.company_type, c.employee_range
          FROM ${base.from} WHERE ${base.where}
         ORDER BY c.claimed_status DESC, c.employee_count DESC, c.id
         LIMIT ? OFFSET ?`
@@ -214,7 +215,7 @@ export async function loadSupplier(env: Env, slug: string): Promise<SupplierData
     ).bind(company.id),
     env.DB.prepare(
       `SELECT c.id, c.slug, c.name, c.description, c.city, c.state, c.state_slug, c.country, c.country_slug,
-              c.employee_count, c.revenue_tier, c.claimed_status, c.year_founded, c.company_type
+              c.employee_count, c.revenue_tier, c.claimed_status, c.year_founded, c.company_type, c.employee_range
          FROM company_categories cc JOIN companies c ON c.id = cc.company_id
         WHERE cc.category_id = (SELECT MIN(category_id) FROM company_categories WHERE company_id = ?)
           AND c.id != ? AND c.country_slug = ?
@@ -280,7 +281,7 @@ export async function searchCompanies(env: Env, raw: string, page: number): Prom
     env.DB.prepare('SELECT COUNT(*) AS n FROM company_search WHERE company_search MATCH ?').bind(q),
     env.DB.prepare(
       `SELECT c.id, c.slug, c.name, c.description, c.city, c.state, c.state_slug, c.country, c.country_slug,
-              c.employee_count, c.revenue_tier, c.claimed_status, c.year_founded, c.company_type
+              c.employee_count, c.revenue_tier, c.claimed_status, c.year_founded, c.company_type, c.employee_range
          FROM company_search s JOIN companies c ON c.id = s.rowid
         WHERE company_search MATCH ?
         ORDER BY bm25(company_search, 10.0, 2.0, 2.0, 2.0, 5.0, 1.0, 3.0), c.claimed_status DESC

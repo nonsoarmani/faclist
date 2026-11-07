@@ -171,6 +171,8 @@ const hue = (s: string) => [...s].reduce((a, c) => (a + c.charCodeAt(0) * 7) % 3
 const avatar = (name: string, lg = false) =>
   `<div class="av${lg ? ' lg' : ''}" style="background:hsl(${hue(name)} 55% 42%)" aria-hidden="true">${esc(initials(name))}</div>`;
 
+export const fmtRange = (s: string) => s.replace(/\d+/g, (m) => Number(m).toLocaleString('en-US'));
+
 const TIER: Record<string, string> = { micro: 'Micro business', small: 'Small business', mid: 'Mid-size', large: 'Large manufacturer', enterprise: 'Enterprise' };
 
 const uniq = (a: (string | null | undefined)[]) => [...new Set(a.filter(Boolean) as string[])];
@@ -193,7 +195,7 @@ const resultCard = (c: CompanyCard) => {
 <div class="loc">&#128205; ${esc(where)}</div>
 ${full ? `<p>${esc(full.slice(0, 190))}${full.length > 190 ? '&hellip;' : ''}</p>` : ''}
 <div class="tags">${c.company_type ? `<span class="tag">${esc(c.company_type)}</span>` : ''}${c.year_founded ? `<span class="tag grey">Est. ${c.year_founded}</span>` : ''}${c.revenue_tier ? `<span class="tag grey">${esc(TIER[c.revenue_tier] ?? c.revenue_tier)}</span>` : ''}${
-    c.employee_count ? `<span class="tag grey">${c.employee_count} employees</span>` : ''
+    c.employee_range ? `<span class="tag grey">${esc(fmtRange(c.employee_range))} employees</span>` : c.employee_count ? `<span class="tag grey">${c.employee_count} employees</span>` : ''
   }</div></div><a class="btn blue cta" href="/supplier/${esc(c.slug)}">View profile</a></article>`;
 };
 
@@ -477,7 +479,7 @@ ${fact('Location', esc(uniq([c.city, c.state, c.country]).join(', ')))}
 ${fact('Address', c.address ? esc(c.address) : null)}
 ${fact('Company type', c.company_type ? esc(c.company_type) : null)}
 ${fact('Year founded', year ? `${year}${yrs ? ` (${yrs} ${yrs === 1 ? 'year' : 'years'} in business)` : ''}` : null)}
-${fact('Employees', empRange(c.employee_count))}
+${fact('Employees', c.employee_range ? esc(fmtRange(c.employee_range)) : empRange(c.employee_count))}
 ${fact('Annual sales', sales ? esc(sales) : null)}
 ${fact('Profile', c.claimed_status ? 'Verified' : 'Unclaimed')}
 ${c.website ? `<p style="margin:14px 0 0"><a class="btn blue" style="display:block" href="${esc(c.website)}" rel="nofollow noopener" target="_blank">Visit website</a></p>` : ''}
@@ -510,7 +512,9 @@ ${c.website ? `<p style="margin:14px 0 0"><a class="btn blue" style="display:blo
           addressCountry: c.country_code,
         },
         geo: c.lat != null && c.lng != null ? { '@type': 'GeoCoordinates', latitude: c.lat, longitude: c.lng } : undefined,
-        numberOfEmployees: c.employee_count ? { '@type': 'QuantitativeValue', value: c.employee_count } : undefined,
+        numberOfEmployees: c.employee_range
+          ? (() => { const m = c.employee_range!.match(/^(\d+)(?:-(\d+)|\+)?$/); return m ? { '@type': 'QuantitativeValue', minValue: Number(m[1]), maxValue: m[2] ? Number(m[2]) : undefined } : undefined; })()
+          : c.employee_count ? { '@type': 'QuantitativeValue', value: c.employee_count } : undefined,
         makesOffer: categories.map((x) => ({ '@type': 'Offer', itemOffered: { '@type': 'Service', name: x.name } })),
         hasCredential: certs.map((x) => ({
           '@type': 'EducationalOccupationalCredential',
