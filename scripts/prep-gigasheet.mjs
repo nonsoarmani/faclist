@@ -12,13 +12,14 @@
 //          --exclude-words "software,recruit"   drop companies whose name contains one of these words
 //          --section trade   put the companies in the Import & Export section
 //          --auto-categories trade   sort companies into Freight & Logistics / Trading Companies / Importers & Exporters by name
+//          --exclude-file data/trade-1500.csv   skip companies already prepared in earlier file(s) (comma-separate several)
 //          --top-countries 8   --top-regions 12   (how widely --pick spreads)
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 
 const argv = process.argv.slice(2);
 const opt = (n) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : undefined; };
 const flag = (n) => argv.includes(`--${n}`);
-const valIdx = new Set(['--category', '--type', '--out', '--limit', '--skip', '--pick', '--profile', '--prefer-words', '--section', '--auto-categories', '--match-words', '--exclude-words', '--top-countries', '--top-regions'].map((f) => argv.indexOf(f) + 1).filter((i) => i > 0));
+const valIdx = new Set(['--category', '--type', '--out', '--limit', '--skip', '--pick', '--profile', '--prefer-words', '--section', '--auto-categories', '--exclude-file', '--match-words', '--exclude-words', '--top-countries', '--top-regions'].map((f) => argv.indexOf(f) + 1).filter((i) => i > 0));
 const input = argv.find((a, i) => !a.startsWith('--') && !valIdx.has(i));
 const category = opt('category');
 const auto = opt('auto-categories');
@@ -108,6 +109,17 @@ const get = (r, k) => (r[head.indexOf(k)] ?? '').trim();
 
 const drop = { noMatch: 0, noName: 0, noLatin: 0, noCountry: 0, noSite: 0, noLoc: 0, noise: 0, dupe: 0 };
 const seen = new Set();
+const seenName = new Set();
+for (const f of (opt('exclude-file') ?? '').split(',').map((x) => x.trim()).filter(Boolean)) {
+  const ex = parseCsv(readFileSync(f, 'utf8'));
+  const h = ex[0].map((x) => x.trim().toLowerCase());
+  for (const r of ex.slice(1)) {
+    const site = (r[h.indexOf('website')] ?? '').trim();
+    if (site) seen.add(site);
+    seenName.add(`${(r[h.indexOf('name')] ?? '').toLowerCase()}|${(r[h.indexOf('city')] ?? '').toLowerCase()}`);
+  }
+  console.log(`Skipping ${ex.length - 1} companies already in ${f}`);
+}
 const cols = ['name', 'description', 'address', 'city', 'state', 'country', 'country_code', 'website', 'employee_count', 'revenue_tier', 'lat', 'lng', 'categories', 'certifications', 'year_founded', 'company_type', 'employee_range', 'data_source', 'section'];
 const cands = [];
 const thisYear = new Date().getFullYear();
@@ -125,6 +137,7 @@ for (let i = 1; i < rows.length; i++) {
   if (MATCH && !MATCH.test(rawName)) { drop.noMatch++; continue; }
   if (EXCLUDE && EXCLUDE.test(rawName)) { drop.noise++; continue; }
   if (!flag('no-noise-filter') && NOISE.test(rawName)) { drop.noise++; continue; }
+  if (seenName.has(`${titleCase(rawName, true).toLowerCase()}|${city.toLowerCase()}`)) { drop.dupe++; continue; }
   const key = site || `${rawName}|${countryRaw}|${city}`;
   if (seen.has(key)) { drop.dupe++; continue; }
   seen.add(key);

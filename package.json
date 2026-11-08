@@ -18,7 +18,8 @@
     "db:migrate3:local": "wrangler d1 execute faclist-db --local --file=./db/migrations/003-employee-range.sql",
     "prep": "node scripts/prep-gigasheet.mjs",
     "db:migrate4:remote": "wrangler d1 execute faclist-db --remote --file=./db/migrations/004-sections.sql",
-    "db:migrate4:local": "wrangler d1 execute faclist-db --local --file=./db/migrations/004-sections.sql"
+    "db:migrate4:local": "wrangler d1 execute faclist-db --local --file=./db/migrations/004-sections.sql",
+    "fix:dupes": "node scripts/fix-duplicates.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250101.0",

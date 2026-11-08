@@ -1,7 +1,20 @@
 import type { Env } from './env';
+import states from './states.json';
 import { getCategory, getCertification, getHomeCategories, getHomeData, getSectionData, getLocation, loadListing, loadSupplier, searchCompanies } from './db';
 import { handleSitemap } from './sitemap';
 import { renderHome, renderListing, renderSearch, renderSection, renderSupplier, layout } from './render';
+
+// Old category addresses that were merged into another category (permanent redirects keep Google rankings).
+const CATEGORY_REDIRECTS: Record<string, string> = { 'electronics-and-electrical': 'electrical-and-electronics' };
+
+// /directory/<category>/mn  ->  /directory/<category>/minnesota   (US states and Canadian provinces)
+const stateSlug = (name: string) => {
+  const s = name.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return s === 'georgia' ? 'georgia-us' : s;
+};
+const ABBR_REDIRECTS: Record<string, string> = Object.fromEntries(
+  [...Object.entries(states.US), ...Object.entries(states.CA)].map(([abbr, name]) => [abbr.toLowerCase(), stateSlug(name)])
+);
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const CACHE = 'public, max-age=300, s-maxage=3600';
@@ -78,11 +91,17 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
     if (seg[0] === 'directory' && seg.length >= 2 && seg.length <= 4) {
       const [, catSlug, locSlug, certSlug] = seg;
+      if (CATEGORY_REDIRECTS[catSlug]) {
+        return Response.redirect(`${origin}/directory/${[CATEGORY_REDIRECTS[catSlug], ...seg.slice(2)].join('/')}${url.search}`, 301);
+      }
       const [category, location, cert] = await Promise.all([
         getCategory(env, catSlug),
         locSlug ? getLocation(env, locSlug) : Promise.resolve(null),
         certSlug ? getCertification(env, certSlug) : Promise.resolve(null),
       ]);
+      if (locSlug && !location && ABBR_REDIRECTS[locSlug]) {
+        return Response.redirect(`${origin}/directory/${[catSlug, ABBR_REDIRECTS[locSlug], ...seg.slice(3)].join('/')}${url.search}`, 301);
+      }
       if (!category || (locSlug && !location) || (certSlug && !cert)) return notFound(origin);
 
       const rawPage = Number(url.searchParams.get('page') ?? '1');

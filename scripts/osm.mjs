@@ -129,7 +129,7 @@ const PRODUCT_RULES = [
   [/plastic|polymer|rubber/, 'Plastics & Rubber'],
   [/steel|iron|metal|alumin|wire|pipe|tube|cast|forg/, 'Metal Fabrication'],
   [/machin|equipment|engine|pump|tool|mechanic/, 'Machinery & Equipment'],
-  [/electr|cable|battery|circuit|solar/, 'Electronics & Electrical'],
+  [/electr|cable|battery|circuit|solar/, 'Electrical & Electronics'],
   [/furniture|wood|timber|saw/, 'Wood & Furniture'],
   [/food|beverage|bread|drink|water|flour|sugar|oil|dairy|beer|brew/, 'Food & Beverage'],
   [/textile|cloth|garment|fabric|shoe|leather|apparel/, 'Textiles & Apparel'],

@@ -6,6 +6,9 @@
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
+const STATES = JSON.parse(readFileSync(new URL('../src/states.json', import.meta.url), 'utf8'));
+const expandState = (state, cc) => STATES[String(cc).toUpperCase()]?.[state.trim().replace(/\./g, '').toUpperCase()] ?? state;
+
 const args = process.argv.slice(2);
 const file = args.find((a) => !a.startsWith('--'));
 const local = args.includes('--local');
@@ -75,7 +78,8 @@ for (let i = 1; i < rows.length; i++) {
   const r = rows[i];
   const name = col(r, 'name'), country = col(r, 'country');
   if (!name || !country) { skipped.push(`row ${i + 1}: missing name or country`); continue; }
-  const city = col(r, 'city'), state = col(r, 'state');
+  const city = col(r, 'city');
+  const state = expandState(col(r, 'state'), col(r, 'country_code'));
   let slug = slugify(`${name} ${city}`) || slugify(name);
   if (!slug) { skipped.push(`row ${i + 1}: name has no usable letters`); continue; }
   let n = 2; const base = slug;
@@ -125,6 +129,7 @@ for (const r of records) {
   if (!r.state) { r.state_slug = null; continue; }
   const owner = `state:${r.country_slug}`;
   let s = slugify(r.state);
+  if (s === 'georgia' && String(r.country_code).toUpperCase() === 'US') s = 'georgia-us'; // keeps the US state apart from the country
   if (used.has(s) && used.get(s) !== owner) s = `${s}-${slugify(r.country_code) || r.country_slug}`;
   used.set(s, owner);
   r.state_slug = s;
