@@ -49,6 +49,7 @@ if (dry) process.exit(0);
 const run = (args) => spawnSync('npx', ['wrangler', 'd1', 'execute', 'faclist-db', '--remote', ...args], { stdio: 'inherit', shell: true }).status === 0;
 if (!run(['--file', 'db/fix-duplicates.sql', '--yes'])) { console.error('\nStopped with an error. It is safe to run the same command again.'); process.exit(1); }
 console.log('\nChecking the result. The first list should be EMPTY, the second should show no "electronics-and-electrical":\n');
-run(['--command', "SELECT slug FROM locations WHERE type = 'state' AND length(slug) = 2"]);
-run(['--command', "SELECT slug, section FROM categories ORDER BY slug"]);
+// the SQL is wrapped in double quotes so Windows passes it to wrangler as ONE argument
+run(['--command', '"SELECT slug FROM locations WHERE type = \'state\' AND length(slug) = 2"']);
+run(['--command', '"SELECT slug, section FROM categories ORDER BY slug"']);
 console.log('\nDone. Old addresses now redirect to the new ones automatically.');

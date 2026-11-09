@@ -39,9 +39,14 @@ const missing = () => new Response('Not found', { status: 404, headers: { 'conte
  */
 export async function handleSitemap(path: string, env: Env, origin: string): Promise<Response> {
   if (path === '/sitemap-index.xml' || path === '/sitemap.xml') {
-    const r = await env.DB.prepare(
-      `SELECT country_slug AS slug, COUNT(*) AS n, MAX(created_at) AS last FROM companies GROUP BY country_slug ORDER BY country_slug`
-    ).all<{ slug: string; n: number; last: string }>();
+    const stored = await env.DB.prepare("SELECT value FROM site_stats WHERE key = 'sitemap-index'").first<{ value: string }>().catch(() => null);
+    const r = {
+      results: stored
+        ? (JSON.parse(stored.value) as { slug: string; n: number; last: string }[])
+        : (await env.DB.prepare(
+            `SELECT country_slug AS slug, COUNT(*) AS n, MAX(created_at) AS last FROM companies GROUP BY country_slug ORDER BY country_slug`
+          ).all<{ slug: string; n: number; last: string }>()).results,
+    };
     const items: { loc: string; lastmod?: string }[] = [{ loc: `${origin}/sitemap-pages.xml` }];
     for (const c of r.results) {
       items.push({ loc: `${origin}/sitemap-${c.slug}.xml`, lastmod: day(c.last) });
@@ -75,6 +80,22 @@ export async function handleSitemap(path: string, env: Env, origin: string): Pro
   const country = path.match(/^\/sitemap-([a-z0-9-]+)\.xml$/);
   if (country) {
     const cs = country[1];
+    const hasStats = await env.DB.prepare('SELECT 1 AS x FROM listing_stats LIMIT 1').first().catch(() => null);
+    if (!hasStats) {
+      // safe mode: the old per-country scan is far too expensive for the free plan
+      return new Response('Sitemap is being prepared, retry later', { status: 503, headers: { 'retry-after': '3600', 'cache-control': 'no-store' } });
+    }
+    {
+      const ls = await env.DB.prepare(
+        `SELECT cat_slug AS cat, loc_slug AS loc, cert_slug AS cert FROM listing_stats
+          WHERE country_slug = ? AND loc_slug <> '' AND total >= ? ORDER BY cat_slug, loc_slug, cert_slug`
+      ).bind(cs, MIN_LISTING).all<{ cat: string; loc: string; cert: string | null }>();
+      if (!ls.results.length) {
+        const exists = await env.DB.prepare('SELECT 1 AS x FROM companies WHERE country_slug = ? LIMIT 1').bind(cs).first();
+        if (!exists) return missing();
+      }
+      return urlset(ls.results.map((r) => ({ loc: `${origin}/directory/${r.cat}/${r.loc}${r.cert ? `/${r.cert}` : ''}` })));
+    }
     const base = `FROM company_categories cc JOIN companies c ON c.id = cc.company_id JOIN categories cat ON cat.id = cc.category_id`;
     const certJoin = `JOIN company_certifications cx ON cx.company_id = c.id JOIN certifications ce ON ce.id = cx.certification_id`;
     const [a, b, c2, d] = await env.DB.batch([

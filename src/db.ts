@@ -100,7 +100,23 @@ export const getLocation = (env: Env, slug: string) =>
 export const getCertification = (env: Env, slug: string) =>
   env.DB.prepare('SELECT * FROM certifications WHERE slug = ?').bind(slug).first<Certification>();
 
+async function readSiteStat<T>(env: Env, key: string): Promise<T | null> {
+  try {
+    const r = await env.DB.prepare('SELECT value FROM site_stats WHERE key = ?').bind(key).first<{ value: string }>();
+    return r ? (JSON.parse(r.value) as T) : null;
+  } catch (e) {
+    if (/no such table/i.test(String((e as Error)?.message))) return null; // not created yet
+    throw e; // a real problem (for example the daily limit): let the page answer 503
+  }
+}
+
 export async function getHomeCategories(env: Env) {
+  const [m, t] = await Promise.all([readSiteStat<SectionData>(env, 'section:manufacturing'), readSiteStat<SectionData>(env, 'section:trade')]);
+  if (m && t) return [...m.categories, ...t.categories].sort((a, b) => b.n - a.n);
+  return []; // statistics not built yet: the search page simply shows no category links
+}
+
+async function getHomeCategoriesLive(env: Env) {
   const r = await env.DB.prepare(
     `SELECT cat.slug, cat.name, COUNT(cc.company_id) AS n
        FROM categories cat LEFT JOIN company_categories cc ON cc.category_id = cat.id
@@ -128,8 +144,8 @@ function buildFilter(f: Filter) {
   return { from, where, params };
 }
 
-/** One D1 round-trip (batch) loads everything a listing page needs. Returns null when the page is out of range. */
-export async function loadListing(env: Env, f: Filter, page: number): Promise<ListingData | null> {
+/** The original, expensive way: scans every matching company. Only used until `npm run stats` has been run once. */
+async function loadListingLive(env: Env, f: Filter, page: number): Promise<ListingData | null> {
   const base = buildFilter(f);
   const noCert = buildFilter({ ...f, certId: undefined });
   const none = () => env.DB.prepare('SELECT 1 AS x WHERE 0');
@@ -191,6 +207,65 @@ export async function loadListing(env: Env, f: Filter, page: number): Promise<Li
   };
 }
 
+const CARD_COLS = `c.id, c.slug, c.name, c.description, c.city, c.state, c.state_slug, c.country, c.country_slug,
+              c.employee_count, c.revenue_tier, c.claimed_status, c.year_founded, c.company_type, c.employee_range`;
+
+/**
+ * The cheap way: counts and facets come from one pre-computed row, and the page of companies is read in index order,
+ * so a page view touches roughly 24 rows instead of every company in the category.
+ */
+export async function loadListing(env: Env, f: Filter, page: number): Promise<ListingData | null> {
+  const key = `${f.categoryId}|${f.location?.slug ?? ''}|${f.certId ?? 0}`;
+  const stat = await env.DB.prepare(
+    'SELECT total, avg_emp, claimed, top_cities, loc_facets, cert_facets FROM listing_stats WHERE key = ?'
+  ).bind(key).first<{ total: number; avg_emp: number | null; claimed: number; top_cities: string; loc_facets: string; cert_facets: string }>();
+  if (!stat) {
+    const built = await env.DB.prepare('SELECT 1 AS x FROM listing_stats LIMIT 1').first();
+    if (built) return null; // statistics exist but have no row for this combination = no companies = 404
+    // Safe mode: the old method scans thousands of rows per page and burns the free daily read limit,
+    // so until the statistics are built the page answers "busy, retry later" (503) instead.
+    throw new Error('Statistics are not built yet. Run: npm run db:migrate5:remote  and then  npm run stats');
+  }
+  if ((page - 1) * PAGE_SIZE >= stat.total) return null;
+
+  const loc = f.location;
+  const col = loc ? (loc.type === 'state' ? 'c.state_slug' : 'c.country_slug') : null;
+  let sql: string;
+  let params: unknown[];
+  if (f.certId !== undefined) {
+    // certification pages are small: start from the certification, already in company order
+    sql = `SELECT ${CARD_COLS} FROM company_certifications cx
+             CROSS JOIN company_categories cc ON cc.company_id = cx.company_id AND cc.category_id = ?
+             CROSS JOIN companies c ON c.id = cx.company_id
+            WHERE cx.certification_id = ?${col ? ` AND ${col} = ?` : ''}
+            ORDER BY cx.company_id LIMIT ? OFFSET ?`;
+    params = [f.categoryId, f.certId, ...(loc ? [loc.slug] : [])];
+  } else if (loc?.type === 'state') {
+    // a state is a small slice: start from the state index
+    sql = `SELECT ${CARD_COLS} FROM companies c
+             CROSS JOIN company_categories cc ON cc.company_id = c.id AND cc.category_id = ?
+            WHERE c.state_slug = ? ORDER BY c.id LIMIT ? OFFSET ?`;
+    params = [f.categoryId, loc.slug];
+  } else {
+    // whole category or a country: start from the category's company list, already in company order
+    sql = `SELECT ${CARD_COLS} FROM company_categories cc
+             CROSS JOIN companies c ON c.id = cc.company_id
+            WHERE cc.category_id = ?${loc ? ' AND c.country_slug = ?' : ''}
+            ORDER BY cc.company_id LIMIT ? OFFSET ?`;
+    params = [f.categoryId, ...(loc ? [loc.slug] : [])];
+  }
+  const rows = await env.DB.prepare(sql).bind(...params, PAGE_SIZE, (page - 1) * PAGE_SIZE).all<CompanyCard>();
+  return {
+    total: stat.total,
+    avgEmployees: stat.avg_emp,
+    claimed: stat.claimed,
+    companies: rows.results,
+    topCities: JSON.parse(stat.top_cities),
+    locationFacets: JSON.parse(stat.loc_facets),
+    certFacets: JSON.parse(stat.cert_facets),
+  };
+}
+
 /* ---------- supplier page ---------- */
 
 export interface SupplierData {
@@ -204,6 +279,8 @@ export async function loadSupplier(env: Env, slug: string): Promise<SupplierData
   const company = await env.DB.prepare('SELECT * FROM companies WHERE slug = ?').bind(slug).first<Company>();
   if (!company) return null;
 
+  const placeCol = company.state_slug ? 'c.state_slug' : 'c.country_slug';
+  const placeVal = company.state_slug ?? company.country_slug;
   const [cats, certs, rel] = await env.DB.batch([
     env.DB.prepare(
       `SELECT cat.slug, cat.name, cat.section FROM company_categories cc JOIN categories cat ON cat.id = cc.category_id
@@ -214,21 +291,32 @@ export async function loadSupplier(env: Env, slug: string): Promise<SupplierData
          JOIN certifications ce ON ce.id = cx.certification_id
         WHERE cx.company_id = ? ORDER BY ce.code`
     ).bind(company.id),
+    // neighbours in the same category and place: the next companies by id (no sorting, so it reads only a handful of rows)
     env.DB.prepare(
-      `SELECT c.id, c.slug, c.name, c.description, c.city, c.state, c.state_slug, c.country, c.country_slug,
-              c.employee_count, c.revenue_tier, c.claimed_status, c.year_founded, c.company_type, c.employee_range
-         FROM company_categories cc JOIN companies c ON c.id = cc.company_id
-        WHERE cc.category_id = (SELECT MIN(category_id) FROM company_categories WHERE company_id = ?)
-          AND c.id != ? AND c.country_slug = ?
-        ORDER BY c.claimed_status DESC, c.employee_count DESC LIMIT 6`
-    ).bind(company.id, company.id, company.country_slug),
+      `SELECT ${CARD_COLS} FROM companies c
+         CROSS JOIN company_categories cc ON cc.company_id = c.id
+          AND cc.category_id = (SELECT MIN(category_id) FROM company_categories WHERE company_id = ?)
+        WHERE ${placeCol} = ? AND c.id > ? ORDER BY c.id LIMIT 6`
+    ).bind(company.id, placeVal, company.id),
   ]);
+
+  let related = rel.results as unknown as CompanyCard[];
+  if (related.length < 6) {
+    // near the end of the list: wrap round and take the companies just before this one
+    const more = await env.DB.prepare(
+      `SELECT ${CARD_COLS} FROM companies c
+         CROSS JOIN company_categories cc ON cc.company_id = c.id
+          AND cc.category_id = (SELECT MIN(category_id) FROM company_categories WHERE company_id = ?)
+        WHERE ${placeCol} = ? AND c.id < ? ORDER BY c.id DESC LIMIT ?`
+    ).bind(company.id, placeVal, company.id, 6 - related.length).all<CompanyCard>();
+    related = [...related, ...more.results];
+  }
 
   return {
     company,
     categories: cats.results as unknown as SupplierData['categories'],
     certs: certs.results as unknown as SupplierData['certs'],
-    related: rel.results as unknown as CompanyCard[],
+    related,
   };
 }
 
@@ -248,6 +336,12 @@ export interface HomeData extends SectionData {
 
 /** Categories, company count and (optionally) countries for one section of the site. */
 export async function getSectionData(env: Env, section: SectionName, withCountries = true): Promise<SectionData> {
+  const stored = await readSiteStat<SectionData>(env, `section:${section}`);
+  if (stored) return withCountries ? stored : { ...stored, countries: [] };
+  throw new Error('Statistics are not built yet. Run: npm run db:migrate5:remote  and then  npm run stats'); // safe mode, see loadListing
+}
+
+async function getSectionDataLive(env: Env, section: SectionName, withCountries = true): Promise<SectionData> {
   const stmts = [
     env.DB.prepare(
       `SELECT COUNT(DISTINCT cc.company_id) AS n FROM company_categories cc JOIN categories k ON k.id = cc.category_id WHERE k.section = ?`

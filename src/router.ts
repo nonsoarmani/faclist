@@ -17,7 +17,7 @@ const ABBR_REDIRECTS: Record<string, string> = Object.fromEntries(
 );
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const CACHE = 'public, max-age=300, s-maxage=3600';
+const CACHE = 'public, max-age=300, s-maxage=86400';
 
 const html = (body: string, status = 200, extra: HeadersInit = {}) =>
   new Response(body, {
@@ -121,9 +121,9 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
     return notFound(origin);
   } catch (err) {
     console.error('render failure', path, err);
-    return new Response(`<!doctype html><title>Error</title><p>Something went wrong. Please retry.</p>`, {
-      status: 500,
-      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+    return new Response(`<!doctype html><title>Please retry</title><p>The directory is busy for a moment. Please retry in a minute.</p>`, {
+      status: 503,
+      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'retry-after': '120' },
     });
   }
 }

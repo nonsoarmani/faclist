@@ -207,4 +207,9 @@ for (const f of files) {
   const res = spawnSync('npx', ['wrangler', 'd1', 'execute', DB_NAME, local ? '--local' : '--remote', '--file', f, '--yes'], { stdio: 'inherit', shell: true });
   if (res.status !== 0) { console.error(`\nStopped at ${f}. Fix the problem and run the same command again. It is safe to repeat, nothing is duplicated.`); process.exit(1); }
 }
+if (!args.includes('--no-stats')) {
+  console.log('\nUpdating the pre-computed page statistics...');
+  const st = spawnSync('node', ['scripts/build-stats.mjs', ...(local ? ['--local'] : [])], { stdio: 'inherit', shell: true });
+  if (st.status !== 0) console.log('\nThe companies are loaded, but the statistics step failed. Run  npm run db:migrate5:remote  (once), then  npm run stats.');
+}
 console.log('\nDone! Pages for the new companies are live now. The homepage and listing pages may take up to a day to refresh because of caching.');
