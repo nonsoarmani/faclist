@@ -8,6 +8,9 @@ import type { Env } from '../src/env';
 //   - a backup copy (7 days), used ONLY when the database is busy or unavailable (for example while you are
 //     running an import), so visitors and Google keep getting a normal page instead of an error.
 export const onRequest: PagesFunction<Env> = async ({ request, env, waitUntil }) => {
+  const path = new URL(request.url).pathname;
+  // forms and the admin area: never cached, may be POSTed
+  if (/^\/(claim|quote|manage|admin)(\/|$)/.test(path)) return handleRequest(request, env);
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return new Response('Method Not Allowed', { status: 405, headers: { allow: 'GET, HEAD' } });
   }

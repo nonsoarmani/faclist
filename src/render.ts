@@ -79,6 +79,12 @@ form.hsearch input:focus{border-color:var(--blue);background:#fff}
 .search input{flex:1;min-width:0;border:0;font-size:1rem;padding:12px 10px;background:transparent;color:var(--fg);outline:none}
 .pop{margin-top:14px;font-size:.9rem;color:#b6c7ee}.pop a{color:#fff;margin-right:14px}
 .na{color:#94a3b8;font-weight:400;font-style:normal}
+.form label{display:block;margin:14px 0 4px;font-weight:600}.form label.chk{display:flex;gap:8px;align-items:flex-start;font-weight:400;margin-top:18px}
+.form input:not([type=checkbox]),.form textarea,.form select{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fff;color:var(--fg)}
+.form small{display:block;color:var(--mut);margin-top:4px}.hp{position:absolute;left:-9999px;height:0;overflow:hidden}
+.alert{background:#fee2e2;color:#991b1b;border-radius:10px;padding:10px 14px;margin:12px 0}.ok{background:#dcfce7;color:#166534;border-radius:10px;padding:10px 14px;margin:12px 0}
+.tbl{width:100%;border-collapse:collapse}.tbl th,.tbl td{padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left;font-size:.9rem}.scroll{overflow-x:auto}
+.feat-tag{background:#fef3c7;color:#92400e;border-radius:99px;padding:1px 10px;font-size:.72rem;font-weight:700;margin-left:8px;vertical-align:middle;white-space:nowrap}
 .list2{margin:0;padding-left:20px;color:#334155}.list2 li{margin:2px 0}
 .fbox,aside .box.fbox{padding:0}.fbox summary{cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:14px 18px;font-size:.78rem;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);font-weight:700;list-style:none}
 .fbox summary::-webkit-details-marker{display:none}.fbox summary::after{content:"+";font-size:1.2rem;line-height:1}.fbox[open] summary::after{content:"\\2212"}
@@ -149,10 +155,10 @@ ${jsonLd(o.schema)}
 <header class="site"><div class="wrap bar">
 <a class="logo" href="/">${LOGO}FacList</a>
 <form class="hsearch" action="/search" method="get" role="search"><input type="search" name="q" maxlength="100" placeholder="Search e.g. CNC machining Lagos" aria-label="Search suppliers"></form>
-<nav class="main nav-hide"><a href="/#categories">Categories</a><a href="/#countries">Countries</a><a href="/import-export">Import &amp; Export</a></nav>
+<nav class="main nav-hide"><a href="/#categories">Categories</a><a href="/#countries">Countries</a><a href="/import-export">Import &amp; Export</a><a href="/pricing">For suppliers</a></nav>
 </div></header>
 ${o.body}
-<footer class="site"><div class="wrap"><a href="/"><b>FacList</b></a> &middot; Global manufacturing and supplier directory &middot; &copy; ${new Date().getFullYear()}<br>Some listing data &copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap contributors</a></div></footer>
+<footer class="site"><div class="wrap"><a href="/"><b>FacList</b></a> &middot; Global manufacturing and supplier directory &middot; &copy; ${new Date().getFullYear()} &middot; <a href="/pricing">For suppliers</a><br>Some listing data &copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap contributors</a></div></footer>
 </body></html>`;
 }
 
@@ -187,11 +193,11 @@ const crumbsLd = (origin: string, items: { name: string; url: string }[]) => ({
   itemListElement: items.map((i, idx) => ({ '@type': 'ListItem', position: idx + 1, name: i.name, item: origin + i.url })),
 });
 
-const resultCard = (c: CompanyCard) => {
+const resultCard = (c: CompanyCard, featured = false) => {
   const where = uniq([c.city, c.state ?? c.country]).join(', ');
   const full = c.description ?? '';
   return `<article class="result">${avatar(c.name)}<div class="body">
-<h3><a href="/supplier/${esc(c.slug)}">${esc(c.name)}</a>${c.claimed_status ? '<span class="ver">&#10003; Verified</span>' : ''}</h3>
+<h3><a href="/supplier/${esc(c.slug)}">${esc(c.name)}</a>${c.claimed_status ? '<span class="ver">&#10003; Verified</span>' : ''}${featured ? '<span class="feat-tag">Featured</span>' : ''}</h3>
 <div class="loc">&#128205; ${esc(where)}</div>
 ${full ? `<p>${esc(full.slice(0, 190))}${full.length > 190 ? '&hellip;' : ''}</p>` : ''}
 <div class="tags">${c.company_type ? `<span class="tag">${esc(c.company_type)}</span>` : ''}${c.year_founded ? `<span class="tag grey">Est. ${c.year_founded}</span>` : ''}${c.revenue_tier ? `<span class="tag grey">${esc(TIER[c.revenue_tier] ?? c.revenue_tier)}</span>` : ''}${
@@ -343,11 +349,11 @@ export function renderListing(i: ListingInput): string {
   const body = `<div class="pagehead"><div class="wrap">${crumbsHtml(crumbs)}
 <h1>${esc(copy.h1)}</h1><p>${esc(copy.paragraphs[0])}</p></div></div>
 <div class="wrap layout">
-<aside>${fb(upBox)}${fb(locBox)}${fb(certBox)}</aside>
+<aside><div class="box"><h3>Need a quote?</h3><p style="margin:0 0 10px;font-size:.92rem">Tell us what you need and we will pass it to suppliers.</p><a class="btn" style="display:block" rel="nofollow" href="/quote?category=${esc(category.slug)}${location ? `&amp;loc=${esc(location.slug)}` : ''}">Request quotes</a></div>${fb(upBox)}${fb(locBox)}${fb(certBox)}</aside>
 <script>if(innerWidth<860)document.querySelectorAll('details.fbox').forEach(function(d){d.open=false})</script>
 <div>
 <div class="resulthead"><h2>${data.total.toLocaleString('en-US')} ${data.total === 1 ? unit[0] : unit[1]} found</h2><span class="loc">${pages > 1 ? `Page ${page} of ${pages}` : ''}</span></div>
-${data.companies.map(resultCard).join('')}
+${page === 1 && data.featured?.length ? `<h2 class="sec" style="font-size:1rem;margin:0 0 10px;color:var(--mut)">Featured ${trade ? 'companies' : 'suppliers'}</h2>${data.featured.map((x) => resultCard(x, true)).join('')}<h2 class="sec" style="font-size:1rem;margin:18px 0 10px;color:var(--mut)">All ${trade ? 'companies' : 'suppliers'}</h2>` : ''}${data.companies.filter((x) => !(page === 1 && data.featured?.some((f) => f.id === x.id))).map((x) => resultCard(x)).join('')}
 ${
   pages > 1
     ? `<nav class="pager" aria-label="Pagination">${
@@ -422,7 +428,7 @@ export function renderSearch(
 ${
   results && results.total > 0
     ? `<div class="resulthead"><h2>${results.total.toLocaleString('en-US')} ${results.total === 1 ? 'supplier' : 'suppliers'} found</h2><span class="loc">${pages > 1 ? `Page ${page} of ${pages}` : ''}</span></div>
-${results.companies.map(resultCard).join('')}
+${results.companies.map((x) => resultCard(x)).join('')}
 ${
   pages > 1
     ? `<nav class="pager" aria-label="Pagination">${page > 1 ? `<a class="btn ghost" rel="prev" href="${esc(link(page - 1))}">&larr; Previous</a>` : '<span></span>'}<span class="loc">Page ${page} of ${pages}</span>${page < pages ? `<a class="btn blue" rel="next" href="${esc(link(page + 1))}">Next &rarr;</a>` : '<span></span>'}</nav>`
@@ -489,7 +495,7 @@ export function renderSupplier(origin: string, d: SupplierData): string {
 <div class="profilehead" style="margin-top:12px">${avatar(c.name, true)}<div>
 <h1 style="margin:0">${esc(c.name)}${c.claimed_status ? '<span class="ver">&#10003; Verified</span>' : ''}</h1>
 <div class="loc" style="margin-top:4px">&#128205; ${esc(copy.where)}</div>
-<div class="tags">${c.company_type ? `<span class="tag grey">${esc(c.company_type)}</span>` : ''}${year ? `<span class="tag grey">Est. ${year}</span>` : ''}${certs.map((x) => `<span class="tag">${esc(x.code)}</span>`).join('')}</div></div></div></div></div>
+<div class="tags">${d.featured ? '<span class="feat-tag" style="margin:0">Featured</span>' : ''}${c.company_type ? `<span class="tag grey">${esc(c.company_type)}</span>` : ''}${year ? `<span class="tag grey">Est. ${year}</span>` : ''}${certs.map((x) => `<span class="tag">${esc(x.code)}</span>`).join('')}</div></div></div></div></div>
 <div class="wrap layout profile">
 <div>
 <div class="prose" style="margin-top:0"><h2>About ${esc(c.name)}</h2>${c.description ? `<p>${esc(c.description)}</p>` : ''}${copy.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}</div>
@@ -511,9 +517,10 @@ ${
         .join('')}</ul></div>`
     : ''
 }
-${related.length ? `<h2 class="sec" style="margin-top:28px">${trade ? 'Similar companies nearby' : 'Similar suppliers nearby'}</h2>${related.map(resultCard).join('')}` : ''}
+${related.length ? `<h2 class="sec" style="margin-top:28px">${trade ? 'Similar companies nearby' : 'Similar suppliers nearby'}</h2>${related.map((x) => resultCard(x)).join('')}` : ''}
 </div>
-<aside><div class="box"><h3>Company facts</h3>
+<aside><div class="box"><a class="btn" style="display:block" rel="nofollow" href="/quote/${esc(c.slug)}">Request a quote</a></div>
+<div class="box"><h3>Company facts</h3>
 ${fact('Location', esc(uniq([c.city, c.state, c.country]).join(', ')))}
 ${fact('Address', c.address ? esc(c.address) : null)}
 ${fact('Company type', c.company_type ? esc(c.company_type) : null)}
@@ -522,7 +529,7 @@ ${fact('Employees', c.employee_range ? esc(fmtRange(c.employee_range)) : empRang
 ${fact('Annual sales', sales ? esc(sales) : null)}
 ${fact('Profile', c.claimed_status ? 'Verified' : 'Unclaimed')}
 ${c.website ? `<p style="margin:14px 0 0"><a class="btn blue" style="display:block" href="${esc(c.website)}" rel="nofollow noopener" target="_blank">Visit website</a></p>` : ''}
-</div></aside></div>`;
+</div>${c.contact_email || c.contact_phone ? `<div class="box"><h3>Contact</h3><button class="btn ghost" style="width:100%" data-e="${c.contact_email ? btoa(c.contact_email) : ''}" data-p="${c.contact_phone ? btoa(c.contact_phone) : ''}" onclick="var b=this,e=b.dataset.e,p=b.dataset.p,h='';if(e)h+='<a href=&quot;mailto:'+atob(e)+'&quot;>'+atob(e)+'</a><br>';if(p)h+='<a href=&quot;tel:'+atob(p)+'&quot;>'+atob(p)+'</a>';b.outerHTML=h">Show contact details</button></div>` : ''}${c.claimed_status ? '' : `<div class="box"><h3>Is this your company?</h3><p style="margin:0 0 10px;font-size:.92rem">Claim this profile to verify it, update your details and receive quote requests.</p><a class="btn ghost" style="display:block" rel="nofollow" href="/claim/${esc(c.slug)}">Claim this profile</a></div>`}</aside></div>`;
 
   const schema = {
     '@context': 'https://schema.org',

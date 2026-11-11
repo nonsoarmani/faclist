@@ -2,6 +2,8 @@ import type { Env } from './env';
 import states from './states.json';
 import { getCategory, getCertification, getHomeCategories, getHomeData, getSectionData, getLocation, loadListing, loadSupplier, searchCompanies } from './db';
 import { handleSitemap } from './sitemap';
+import { claimPage, managePage, quotePage, renderPricing } from './forms';
+import { adminRouter } from './admin';
 import { renderHome, renderListing, renderSearch, renderSection, renderSupplier, layout } from './render';
 
 // Old category addresses that were merged into another category (permanent redirects keep Google rankings).
@@ -18,6 +20,8 @@ const ABBR_REDIRECTS: Record<string, string> = Object.fromEntries(
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const CACHE = 'public, max-age=300, s-maxage=86400';
+const CACHE_SHORT = 'public, max-age=60, s-maxage=3600'; // company profiles: owners' edits and the verified badge show within an hour
+const PRIVATE = /^\/(claim|quote|manage|admin)(\/|$)/;
 
 const html = (body: string, status = 200, extra: HeadersInit = {}) =>
   new Response(body, {
@@ -46,10 +50,12 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   let path = url.pathname;
 
   if (path === '/robots.txt') {
-    return new Response(`User-agent: *\nAllow: /\nDisallow: /search\nSitemap: ${origin}/sitemap-index.xml\n`, {
+    return new Response(`User-agent: *\nAllow: /\nDisallow: /search\nDisallow: /claim/\nDisallow: /quote\nDisallow: /manage/\nDisallow: /admin\nSitemap: ${origin}/sitemap-index.xml\n`, {
       headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': CACHE },
     });
   }
+
+  if (request.method === 'POST' && !PRIVATE.test(path)) return new Response('Method Not Allowed', { status: 405, headers: { allow: 'GET, HEAD' } });
 
   // one canonical URL per page: lowercase, no trailing slash
   const normalised = path.length > 1 ? path.replace(/\/+$/, '').toLowerCase() : path;
@@ -70,6 +76,13 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
   if (seg.some((s) => !SLUG.test(s))) return notFound(origin);
 
   try {
+    const ctx = { request, env, origin, url };
+    if (seg[0] === 'claim' && seg.length === 2) return claimPage(ctx, seg[1]);
+    if (seg[0] === 'quote' && seg.length <= 2) return quotePage(ctx, seg[1]);
+    if (seg[0] === 'manage' && seg.length === 2) return managePage(ctx, seg[1]);
+    if (seg[0] === 'admin') return adminRouter(ctx, seg.slice(1));
+    if (seg[0] === 'pricing' && seg.length === 1) return html(renderPricing(origin, env));
+
     if (seg.length === 0) return html(renderHome(origin, await getHomeData(env)));
 
     if (seg[0] === 'import-export' && seg.length === 1) {
@@ -86,7 +99,7 @@ export async function handleRequest(request: Request, env: Env): Promise<Respons
 
     if (seg[0] === 'supplier' && seg.length === 2) {
       const data = await loadSupplier(env, seg[1]);
-      return data ? html(renderSupplier(origin, data)) : notFound(origin);
+      return data ? html(renderSupplier(origin, data), 200, { 'cache-control': CACHE_SHORT }) : notFound(origin);
     }
 
     if (seg[0] === 'directory' && seg.length >= 2 && seg.length <= 4) {

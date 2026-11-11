@@ -32,3 +32,24 @@ products (separate several items with a semicolon). Leave them empty if you don'
 1. Run ONCE:  npm run db:migrate:remote
    (if it says a column already exists, it was already done, ignore it)
 2. Then:  git add .   git commit -m "richer profiles and search"   git push
+
+## Claims, quote requests and Featured listings
+Pages: /claim/<company>, /quote/<company>, /manage/<private link>, /pricing, /admin (your private dashboard).
+
+One-time setup (after pushing the code):
+1. Run once:  npm run db:migrate6:remote
+2. Set your admin password (a long one, 16+ characters). In the terminal:
+       npx wrangler pages secret put ADMIN_PASSWORD --project-name=faclist
+   and type the password when asked. Then open https://faclist.com/admin and log in.
+3. Optional alerts on your phone: create a Telegram bot with @BotFather, then set two more secrets the same way:
+       TELEGRAM_BOT_TOKEN   and   TELEGRAM_CHAT_ID
+4. Optional email (owner edit links, leads forwarded to verified suppliers): make a free account at resend.com,
+   verify faclist.com there, then set the secrets RESEND_API_KEY, MAIL_FROM (for example  FacList <hello@faclist.com>)
+   and ADMIN_EMAIL (where you want alerts).
+5. Optional "Get a Featured listing" button for verified owners: create a checkout link (Paystack, Flutterwave,
+   Gumroad...) and set the secret FEATURED_CHECKOUT_URL.
+Without 3 to 5 everything still works: you see claims and requests in /admin and send links yourself.
+
+Day to day:  /admin > Claims > Approve  (gives you the owner's private edit link)
+             /admin > Quote requests     (forward them, mark them done)
+             /admin > Featured           (switch a paid listing on or off)

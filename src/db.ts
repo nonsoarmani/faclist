@@ -51,6 +51,8 @@ export interface Company extends CompanyCard {
   lng: number | null;
   website: string | null;
   created_at: string;
+  contact_email?: string | null;
+  contact_phone?: string | null;
   sales_range: string | null;
   industries: string | null;
   capabilities: string | null;
@@ -85,6 +87,7 @@ export interface ListingData {
   topCities: string[];
   locationFacets: Facet[];
   certFacets: CertFacet[];
+  featured?: CompanyCard[];
 }
 
 export const PAGE_SIZE = 24;
@@ -255,7 +258,18 @@ export async function loadListing(env: Env, f: Filter, page: number): Promise<Li
     params = [f.categoryId, ...(loc ? [loc.slug] : [])];
   }
   const rows = await env.DB.prepare(sql).bind(...params, PAGE_SIZE, (page - 1) * PAGE_SIZE).all<CompanyCard>();
+  let featured: CompanyCard[] = [];
+  if (page === 1) {
+    // paid placements: a tiny table, so this reads only the handful of featured companies
+    const fcol = loc ? (loc.type === 'state' ? 'c.state_slug' : 'c.country_slug') : null;
+    featured = await env.DB.prepare(
+      `SELECT ${CARD_COLS} FROM featured f CROSS JOIN companies c ON c.id = f.company_id
+         CROSS JOIN company_categories cc ON cc.company_id = c.id AND cc.category_id = ?
+        WHERE f.until > datetime('now')${fcol ? ` AND ${fcol} = ?` : ''} ORDER BY f.until DESC LIMIT 3`
+    ).bind(f.categoryId, ...(loc ? [loc.slug] : [])).all<CompanyCard>().then((r) => r.results).catch(() => []);
+  }
   return {
+    featured,
     total: stat.total,
     avgEmployees: stat.avg_emp,
     claimed: stat.claimed,
@@ -273,6 +287,7 @@ export interface SupplierData {
   categories: { slug: string; name: string; section: string }[];
   certs: { slug: string; code: string; name: string; authority: string | null }[];
   related: CompanyCard[];
+  featured?: boolean;
 }
 
 export async function loadSupplier(env: Env, slug: string): Promise<SupplierData | null> {
@@ -312,7 +327,9 @@ export async function loadSupplier(env: Env, slug: string): Promise<SupplierData
     related = [...related, ...more.results];
   }
 
+  const feat = await env.DB.prepare("SELECT 1 AS x FROM featured WHERE company_id = ? AND until > datetime('now')").bind(company.id).first().catch(() => null);
   return {
+    featured: !!feat,
     company,
     categories: cats.results as unknown as SupplierData['categories'],
     certs: certs.results as unknown as SupplierData['certs'],

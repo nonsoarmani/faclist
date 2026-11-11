@@ -23,7 +23,9 @@
     "stats": "node scripts/build-stats.mjs",
     "stats:local": "node scripts/build-stats.mjs --local",
     "db:migrate5:remote": "wrangler d1 execute faclist-db --remote --file=./db/migrations/005-stats-tables.sql",
-    "db:migrate5:local": "wrangler d1 execute faclist-db --local --file=./db/migrations/005-stats-tables.sql"
+    "db:migrate5:local": "wrangler d1 execute faclist-db --local --file=./db/migrations/005-stats-tables.sql",
+    "db:migrate6:remote": "wrangler d1 execute faclist-db --remote --file=./db/migrations/006-claims-leads.sql",
+    "db:migrate6:local": "wrangler d1 execute faclist-db --local --file=./db/migrations/006-claims-leads.sql"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250101.0",
